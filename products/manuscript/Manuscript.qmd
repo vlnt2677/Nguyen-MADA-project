@@ -1,6 +1,6 @@
 ---
-title: "Example Manuscript Template for a Data Analysis Project"
-author: ""
+title: "Utilizing Google's Mobility Report to predict outbreak dynamics"
+author: "Vincent Nguyen"
 format:
   docx:
     toc: false
@@ -10,14 +10,9 @@ bibliography: ../../assets/dataanalysis-references.bib
 csl: ../../assets/american-journal-of-epidemiology.csl
 ---
 
-
-
-
-The structure below is one possible setup for a manuscript, or a general data analysis project (including the course project). Adjust as needed. 
-You don't need to have exactly these sections, but the content covering those sections should be addressed.
+The structure below is one possible setup for a manuscript, or a general data analysis project (including the course project). Adjust as needed. You don't need to have exactly these sections, but the content covering those sections should be addressed.
 
 This uses MS Word as output format. [See here](https://quarto.org/docs/output-formats/ms-word.html) for more information. You can switch to other formats, like html or pdf. See [the Quarto documentation](https://quarto.org/) for other formats.
-
 
 ```{r, echo=FALSE, message=FALSE}
 # load a few R packages
@@ -25,68 +20,64 @@ library(here)
 library(knitr)
 ```
 
+**Authors**
 
-**Authors**  
+-   Vincent Nguyen$^{1}$ (ORCID: 0000-0000-1234-5678)
 
-* First Autor$^{1,2,*}$ (ORCID: 0000-0000-1234-5678) 
-* Second Author$^{3, *}$
-* Third Autor$^{3, \dagger}$
-* Last Author$^{1, 2, \land}$ 
+**Author affiliations**
 
-**Author affiliations**  
-
-1. College of Public Health, University of Georgia, Athens, GA, USA.
-2. Another Affiliation, Athens, GA, USA.
-3. Yet another Affiliation.
+1.  College of Public Health, University of Georgia, Athens, GA, USA.
 
 $*$ These authors contributed equally to this work.
 
-$\land$ Corresponding author: some@email.com
+$\land$ Corresponding author: some\@email.com
 
-$\dagger$ Disclaimer: The opinions expressed in this article are the
-author's own and don't reflect their employer.
-
+$\dagger$ Disclaimer: The opinions expressed in this article are the author's own and don't reflect their employer.
 
 {{< pagebreak >}}
-
-
 
 # Summary/Abstract
-_Write a summary of your project._
 
+*Write a summary of your project.*
 
 {{< pagebreak >}}
 
-
-# Introduction 
+# Introduction
 
 ## General Background Information
-_Provide enough background on your topic that others can understand the why and how of your analysis_ 
+
+Understanding the spread of infectious diseases is crucial for public health preparedness and response. Disease infection dynamics are shaped by multiple factors, including population movement, the pathogen itself, and public health interventions. Mobility is considered a key driver of human interactions and thus a primary vehicle for transmission potential. The COVID-19 pandemic provides a great example of how changes in mobility, driven by policies and public health measures, influenced infection rates.
 
 ## Description of data and data source
-_Describe what the data is, what it contains, where it is from, etc. Eventually this might be part of a methods section._
+
+This project explores mobility dynamics, as measured by [Google's Community Mobility Reports](https://www.google.com/covid19/mobility/), in an infectious disease context to understand and forecast disease spread. By integrating time-series infection data (provided by [Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)), the analysis aims to simulate disease outbreak scenarios and provide insights into optimal intervention strategies for mitigating future outbreaks.\
+\
+Google's Community Mobility Reports are anonymized insights collected from Google products, such as maps, that detail population movement trends across various categories, such as retail stores, workplaces, residencies, and more.\
+\
+The COVID-19 Data Repository by the Center for Systems Science and Engineering at Johns Hopkins University is a comprehensive data set that tracks global COVID-19 cases, recoveries, and deaths. It was updated regularly and compiles data from various official sources to support research.\
+\
+\
+\
 
 ## Questions/Hypotheses to be addressed
-_State the research questions you plan to answer with this analysis._
+
+How have mobility dynamics influenced the spread of COVID-19 in the U.S. during 2020-2022?\
+\
+Can mobility data, in combination with COVID-19 case counts, be used to forecast future infection trends?
 
 To cite other work (important everywhere, but likely happens first in introduction), make sure your references are in the bibtex file specified in the YAML header above and have the right bibtex key. Then you can include like this:
 
 Examples of reproducible research projects can for instance be found in [@mckay2020; @mckay2020a].
 
-
-
 {{< pagebreak >}}
 
+# Methods
 
-# Methods 
-
-_Describe your methods. That should describe the data, the cleaning processes, and the analysis approaches. You might want to provide a shorter description here and all the details in the supplement._
-
+*Describe your methods. That should describe the data, the cleaning processes, and the analysis approaches. You might want to provide a shorter description here and all the details in the supplement.*
 
 ## Schematic of workflow
 
-Sometimes you might want to show a schematic diagram/figure that was not created with code (if you can do it with code, do it). @fig-schematic is an example of some - completely random/unrelated - schematic that was generated with Biorender.
-We store those figures in the `assets` folder.
+Sometimes you might want to show a schematic diagram/figure that was not created with code (if you can do it with code, do it). @fig-schematic is an example of some - completely random/unrelated - schematic that was generated with Biorender. We store those figures in the `assets` folder.
 
 ```{r}
 #| label: fig-schematic
@@ -95,30 +86,43 @@ We store those figures in the `assets` folder.
 knitr::include_graphics(here("assets","antigen-recognition.png"))
 ```
 
+## Data acquisition
 
-
-
-## Data aquisition
-_As applicable, explain where and how you got the data. If you directly import the data from an online source, you can combine this section with the next._
-
+*COVID-19 case data was provided by the Center of Systems and Science and Engineering at JHU and mobility data was provided by Google's Community Mobility Report.*
 
 ## Data import and cleaning
-_Write code that reads in the file and cleans it so it's ready for analysis. Since this will be fairly long code for most datasets, it might be a good idea to have it in one or several R scripts. If that is the case, explain here briefly what kind of cleaning/processing you do, and provide more details and well documented code somewhere (e.g. as supplement in a paper). All materials, including files that contain code, should be commented well so everyone can follow along._
 
+Since the pandemic spanned across 3 years, data on mobility was collected from 2020 to 2022. The data on mobility is quite extensive and is stratified by county, resulting in the large amount of mobility. The mobility data measures changes in mobility patterns across different key areas, such as retail, workplace, residential, and more.
+
+The time series data has 3342 observations of 1154 variables. Each row represents a different city. The columns record cases as days progress and locational data like longitude and latitude.
+
+```{r}
+
+# importing data
+mobility_data_2020 <- read.csv(here("data", "raw-data", "2020_US_Region_Mobility_Report.csv"))
+mobility_data_2021 <- read.csv(here("data", "raw-data", "2021_US_Region_Mobility_Report.csv"))
+mobility_data_2022 <- read.csv(here("data", "raw-data", "2022_US_Region_Mobility_Report.csv"))
+
+time_series_covid <- read.csv(here("data", "raw-data", "time_series_covid19_confirmed_US.csv"))
+
+
+
+
+
+
+```
 
 ## Statistical analysis
-_Explain anything related to your statistical analyses._
 
+Possibly utilize the EpiModeling package to understand infectious disease dynamics based on the analysis and then simulate future outbreaks? I am not actually sure if this is a feasible use of the data.
 
 {{< pagebreak >}}
-
 
 # Results
 
 ## Exploratory/Descriptive analysis
 
-_Use a combination of text/tables/figures to explore and describe your data. Show the most important descriptive results here. Additional ones should go in the supplement. Even more can be in the R and Quarto files that are part of your project._
-
+*Use a combination of text/tables/figures to explore and describe your data. Show the most important descriptive results here. Additional ones should go in the supplement. Even more can be in the R and Quarto files that are part of your project.*
 
 @tbl-summarytable shows a summary of the data.
 
@@ -132,12 +136,9 @@ resulttable=readRDS("../../results/tables/summarytable.rds")
 knitr::kable(resulttable)
 ```
 
-
-
 ## Basic statistical analysis
 
-_To get some further insight into your data, if reasonable you could compute simple statistics (e.g. simple models with 1 predictor) to look for associations between your outcome(s) and each individual predictor variable. Though note that unless you pre-specified the outcome and main exposure, any "p<0.05 means statistical significance" interpretation is not valid._
-
+*To get some further insight into your data, if reasonable you could compute simple statistics (e.g. simple models with 1 predictor) to look for associations between your outcome(s) and each individual predictor variable. Though note that unless you pre-specified the outcome and main exposure, any "p\<0.05 means statistical significance" interpretation is not valid.*
 
 @fig-result shows a scatterplot figure produced by one of the R scripts.
 
@@ -148,10 +149,9 @@ _To get some further insight into your data, if reasonable you could compute sim
 knitr::include_graphics(here("results","figures","height-weight-stratified.png"))
 ```
 
-
 ## Full analysis
 
-_Use one or several suitable statistical/machine learning methods to analyze your data and to produce meaningful figures, tables, etc. This might again be code that is best placed in one or several separate R scripts that need to be well documented. You want the code to produce figures and data ready for display as tables, and save those. Then you load them here._
+*Use one or several suitable statistical/machine learning methods to analyze your data and to produce meaningful figures, tables, etc. This might again be code that is best placed in one or several separate R scripts that need to be well documented. You want the code to produce figures and data ready for display as tables, and save those. Then you load them here.*
 
 Example @tbl-resulttable2 shows a summary of a linear model fit.
 
@@ -163,33 +163,30 @@ resulttable2 = readRDS(here("results","tables","resulttable2.rds"))
 knitr::kable(resulttable2)
 ```
 
-
 {{< pagebreak >}}
-
 
 # Discussion
 
 ## Summary and Interpretation
-_Summarize what you did, what you found and what it means._
+
+*Summarize what you did, what you found and what it means.*
 
 ## Strengths and Limitations
-_Discuss what you perceive as strengths and limitations of your analysis._
+
+*Discuss what you perceive as strengths and limitations of your analysis.*
 
 ## Conclusions
-_What are the main take-home messages?_
 
-_Include citations in your Rmd file using bibtex, the list of references will automatically be placed at the end_
+*What are the main take-home messages?*
 
-This paper [@leek2015] discusses types of analyses. 
+*Include citations in your Rmd file using bibtex, the list of references will automatically be placed at the end*
 
-These papers [@mckay2020; @mckay2020a] are good examples of papers published using a fully reproducible setup similar to the one shown in this template. 
+This paper [@leek2015] discusses types of analyses.
+
+These papers [@mckay2020; @mckay2020a] are good examples of papers published using a fully reproducible setup similar to the one shown in this template.
 
 Note that this cited reference will show up at the end of the document, the reference formatting is determined by the CSL file specified in the YAML header. Many more style files for almost any journal [are available](https://www.zotero.org/styles). You also specify the location of your bibtex reference file in the YAML. You can call your reference file anything you like.
-
 
 {{< pagebreak >}}
 
 # References
-
-
-
