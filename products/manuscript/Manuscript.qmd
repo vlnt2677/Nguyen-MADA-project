@@ -50,12 +50,13 @@ Understanding the spread of infectious diseases is crucial for public health pre
 
 ## Description of data and data source
 
-This project explores mobility dynamics, as measured by [Google's Community Mobility Reports](https://www.google.com/covid19/mobility/), in an infectious disease context to understand and forecast disease spread. By integrating time-series infection data (provided by [Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)), the analysis aims to simulate disease outbreak scenarios and provide insights into optimal intervention strategies for mitigating future outbreaks.\
+This project explores mobility dynamics, as measured by [Google's Community Mobility Reports](https://www.google.com/covid19/mobility/), in an infectious disease context to understand and forecast disease spread. By integrating time-series infection data (provided by [Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)), the analysis aims to simulate disease outbreak scenarios and provide insights into optimal intervention strategies for mitigating future outbreaks. Additionally, the [County Health Ranking](https://www.countyhealthrankings.org/) is used to assess these dynamics within the context of a county's health care access and performance.\
 \
 Google's Community Mobility Reports are anonymized insights collected from Google products, such as maps, that detail population movement trends across various categories, such as retail stores, workplaces, residencies, and more.\
 \
 The COVID-19 Data Repository by the Center for Systems Science and Engineering at Johns Hopkins University is a comprehensive data set that tracks global COVID-19 cases, recoveries, and deaths. It was updated regularly and compiles data from various official sources to support research.\
-\
+
+The County Health Ranking is a data set that provides a comprehensive overview of various health factors and outcomes across U.S. counties. Data collected includes metrics on healthcare access, insurance coverage, income levels, violent crime, air and water quality, transportation access, and more.\
 \
 \
 
@@ -64,6 +65,12 @@ The COVID-19 Data Repository by the Center for Systems Science and Engineering a
 How have mobility dynamics influenced the spread of COVID-19 in the U.S. during 2020-2022?\
 \
 Can mobility data, in combination with COVID-19 case counts, be used to forecast future infection trends?
+
+How do socio-economic and health factors influence the relationship between mobility patterns and COVID-19 infection rates across U.S. counties?
+
+Investigate if counties with similar health rankings but different mobility trends (or vice versa) experienced different outbreak severities, potentially revealing the effectiveness of local interventions \[reword\]
+
+Examine the time lag between changes in mobility and subsequent changes in infection rates \[reword\]
 
 To cite other work (important everywhere, but likely happens first in introduction), make sure your references are in the bibtex file specified in the YAML header above and have the right bibtex key. Then you can include like this:
 
@@ -105,6 +112,7 @@ mobility_data_2022 <- read.csv(here("data", "raw-data", "2022_US_Region_Mobility
 
 time_series_covid <- read.csv(here("data", "raw-data", "time_series_covid19_confirmed_US.csv"))
 
+chr_data_2024 <- read.csv(here("data", "raw-data", "chr_trends_csv_2024.csv"))
 
 
 
