@@ -109,6 +109,20 @@ merged_df_clean <- merged_df_clean %>%
   group_by(state, county) %>%  # Group by state and county to calculate new cases within each county
   mutate(new_cases = c(NA, diff(total_cases))) %>%  # Calculate new cases
   ungroup()  # Ungroup after the calculation
+
+# Create column for mean average mobiltiy change for that given day and location. I omitted mobility changes to residencies because that may be more of an indication of who is at home.
+merged_df_clean <- merged_df_clean %>%
+  arrange(state, county, date) %>%  # Sort to ensure correct calculations
+  group_by(state, county) %>%  # Group by state and county
+  mutate(average_mobility = rowMeans(
+    cbind(transit_stations_percent_change_from_baseline, 
+          parks_percent_change_from_baseline, 
+          retail_and_recreation_percent_change_from_baseline, 
+          grocery_and_pharmacy_percent_change_from_baseline, 
+          workplaces_percent_change_from_baseline), 
+    na.rm = TRUE)) %>%
+  ungroup()
+
 ```
 
 
