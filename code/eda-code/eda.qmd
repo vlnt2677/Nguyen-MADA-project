@@ -1,196 +1,184 @@
 ---
-title: "An example exploratory analysis script"
-date: "2024-02-07"
+title: "Exploratory Data Analysis"
+date: "2025-02-21"
 output: html_document
 ---
 
-  
-  
 This Quarto file loads the cleaned data and does some exploring.
-
-I'm only showing it the way where the code is included in the file. 
-As described in the `processing_code` materials, I currently prefer the approach of having R code in a separate file and pulling it in.
-
-But I already had this written and haven't yet re-done it that way. Feel free to redo and send a pull request on GitHub :)
-
-Again, it is largely a matter of preference and what makes the most sense to decide if one wants to have code inside Quarto files, or as separate R files.
-And sometimes, an R script with enough comments is good enough and one doesn't need a Quarto file.
-
-Also note that while here I split cleaning and exploring, this is iterative. You saw that as part of the processing, we already had to explore the data somewhat to understand how to clean it. In general, as you explore, you'll find things that need cleaning. As you clean, you can explore more. Therefore, at times it might make more sense to combine the cleaning and exploring code parts into a single R or Quarto file. Or split things in any other logical way.
-
-As part of the exploratory analysis, you should produce plots or tables or other summary quantities for the most interesting/important quantities in your data. Depending on the total number of variables in your dataset, explore all or some of the others. Figures produced here might be histograms or density plots, correlation plots, etc. Tables might summarize your data.
-
-Start by exploring one variable at a time. Then continue by creating plots or tables of the outcome(s) of interest and the predictor/exposure/input variables you are most interested in. If your dataset is small, you can do that for all variables. 
-
-Plots produced here can be scatterplots, boxplots, violinplots, etc. Tables can be simple 2x2 tables or larger ones.
-
 # Setup
 
 ```{r}
-#load needed packages. make sure they are installed.
-library(here) #for data loading/saving
+#load needed packages. make sure they are installed
+library(here) 
 library(dplyr)
 library(skimr)
 library(ggplot2)
 library(zoo)
+library(tidyr)
+library(tigris)
+library(sf)
 ```
 
-
-Load the data.
+Load the data from processingfile-v1 file.
 
 ```{r}
-# importing data
-mobility_data_2020 <- read.csv(here("data", "raw-data", "2020_US_Region_Mobility_Report.csv"))
-mobility_data_2021 <- read.csv(here("data", "raw-data", "2021_US_Region_Mobility_Report.csv"))
-mobility_data_2022 <- read.csv(here("data", "raw-data", "2022_US_Region_Mobility_Report.csv"))
-combined_mobility_data <- bind_rows(mobility_data_2020, mobility_data_2021, mobility_data_2022)
 
-time_series_covid <- read.csv(here("data", "raw-data", "time_series_covid19_confirmed_US.csv"))
-
-chr_data_2024 <- read.csv(here("data", "raw-data", "chr_trends_csv_2024.csv"))
+# processed data
+processeddata <- readRDS(here("data", "processed-data", "processeddata.rds"))
 
 ```
 
-
-
-
-
-# Data exploration through graphs
-
-Showing a bit of code to produce and save a summary table.
-
-
+Creation of a heatmap showing total COVID 19 cases on the last observed date, 10/15/2022. I also created a heat map showing mobility changes, with hotter indicating more mobility to retail and recreational spots. Interestingly, the two maps seem to correlate even though I used total COVID-19 cases rather than new ones.
 ```{r}
-# graph covid cases overtime
+# Load the state-level shapefile 
+us_map_states <- tigris::states(cb = TRUE) %>%
+  st_as_sf()  # Convert the shapefile to a Simple Feature object
 
-# Select only the date columns (starting from the 12th column)
-date_columns_cases <- names(time_series_covid)[12:ncol(time_series_covid)]
+# Clean the state names in the shapefile
+us_map_clean <- us_map_states %>%
+  mutate(NAME = tolower(NAME))  # Convert state abbreviation to lowercase
 
-# Ensure column names are correctly formatted as dates (removing 'X' from the date string)
-date_fixed_cases <- as.Date(gsub("X", "", date_columns_cases), format = "%m.%d.%y")  # Fixed missing parenthesis
+# Filter your dataset to get data for the last recorded day and group by state
+last_day <- max(processeddata$date)
+data_last_day <- processeddata %>%
+  filter(date == last_day) %>%
+  group_by(state) %>%
+  summarise(total_cases = sum(total_cases, na.rm = TRUE),  # Sum of total cases
+            retail_and_recreation_percent_change_from_baseline = 
+              mean(retail_and_recreation_percent_change_from_baseline, na.rm = TRUE)) %>%  # Average mobiltiy changes
+  mutate(state = tolower(state))  # Convert state names to lowercase
 
-# Sum case counts across all locations for each date
-total_cases <- colSums(time_series_covid[, date_columns_cases, drop = FALSE], na.rm = TRUE)
+# Join the shapefile with the COVID-19 data
+us_map_data <- us_map_clean %>%
+  left_join(data_last_day, by = c("NAME" = "state"))
 
-# Convert to a tidy data frame
-total_cases_df <- data.frame(Date = date_fixed_cases, Cases = total_cases)
 
-# Plot the total case counts over time with formatted y-axis labels without using 'scales'
-case_count_graph <- ggplot(total_cases_df, aes(x = Date, y = Cases)) +
+# plot total COVID-19 cases to USA map on 10/15/2022
+cases_map <- ggplot(us_map_data) +
+  geom_sf(aes(fill = total_cases), color = "white") +
+  scale_fill_viridis_c(option = "plasma", trans = "log", labels = NULL) + 
+  labs(title = paste("Heatmap of Total COVID-19 Cases in the U.S. on", last_day),
+       fill = "Hotter = More Cases") +
+  theme_minimal() +
+  coord_sf(xlim = c(-125, -65), ylim = c(25, 50))
+
+print(cases_map)
+
+figure_file = here("results","figures","casemap.png")
+ggsave(filename = figure_file, plot=cases_map)
+
+
+# Create the heatmap for retail and recreation mobility changes
+mobility_map <- ggplot(us_map_data) +
+  geom_sf(aes(fill = retail_and_recreation_percent_change_from_baseline), color = "white") +  
+  scale_fill_viridis_c(option = "inferno", trans = "identity") +
+  labs(title = paste("Heatmap of Retail and Recreation Mobility Changes in the U.S. on", last_day),
+       fill = "Mobility Change") +
+  theme_minimal() +
+  theme(
+        legend.spacing.y = unit(1, "cm"),  
+        legend.box.spacing = unit(1, "cm"),  
+        legend.key.size = unit(1, "cm")) +  
+  coord_sf(xlim = c(-125, -65), ylim = c(25, 50))  
+
+print(mobility_graph)
+
+# save graph
+figure_file = here("results","figures","mobilitymap.png")
+ggsave(filename = figure_file, plot=mobility_map)
+```
+
+This graph aims to plot total cases overtime for every location on a given day. This required the creation of a dataframe to store the sum of all total cases.
+```{r}
+# Create new data frame to have cases per day instead of state/county
+total_cases_df <- processeddata %>%
+  group_by(date) %>%
+  summarise(Cases = sum(total_cases, na.rm = TRUE)) %>%
+  ungroup()
+
+# Plot the total case counts over time
+case_count_graph <- ggplot(total_cases_df, aes(x = date, y = Cases)) +
   geom_line(color = "blue") +
-  scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +  # Format y-axis labels
+  scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +  
   labs(title = "Total COVID-19 Cases Over Time in the U.S.",
        x = "Date",
        y = "Total Cases") +
   theme_minimal()
 
 print(case_count_graph)
+
+# save graph
+figure_file = here("results","figures","casecountplot.png")
+ggsave(filename = figure_file, plot=case_count_graph)
 ```
-
+This graph aims to plot new cases overtime for every location on a given day. This required the creation of a dataframe to store the sum of all new cases.
 ```{r}
-# Calculate the daily new cases by subtracting previous day's total from the current day's total
-new_cases <- c(0, diff(total_cases))  # diff() gives the difference between consecutive days; first day is set to 0
+# data frame to sum all cases on a given day for every location
+new_cases_df <- processeddata %>%
+  group_by(date) %>%
+  summarise(Cases = sum(new_cases, na.rm = TRUE)) %>%
+  ungroup()
 
-# Convert to a tidy data frame for new cases
-new_cases_df <- data.frame(Date = date_fixed_cases, New_Cases = new_cases)
-
-# Plot the new cases (incidence) over time with formatted y-axis labels
-incidence_graph <- ggplot(new_cases_df, aes(x = Date, y = New_Cases)) +
+# Plot the new cases over time
+incidence_graph <- ggplot(new_cases_df, aes(x = date, y = Cases)) +
   geom_line(color = "red") + 
-  scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +  # Format y-axis labels
+  scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
   labs(title = "Daily New COVID-19 Cases Over Time in the U.S.",
        x = "Date",
        y = "New Cases per Day") +
   theme_minimal()
 
 print(incidence_graph)
+
+# save graph
+figure_file = here("results","figures","incidenceplot.png")
+ggsave(filename = figure_file, plot=incidence_graph)
+
 ```
-
+I aim to plot out the changes in mobility for each category as time progresses. Originally, it plotted out everyday, however, the line was far too jagged so I applied a weekly rolling average instead. I also had to create a dataframe to average values for a given day for every location.
 ```{r}
-# Filter for U.S. data (adjust based on actual column name for region/country)
-us_mobility_data <- combined_mobility_data %>%
-  filter(country_region == "United States", sub_region_1 == "") 
 
-# Ensure the Date column is in Date format
-us_mobility_data$Date <- as.Date(us_mobility_data$date, format = "%Y-%m-%d")  # Adjust if needed
-
-# Calculate the 7-day moving average for each mobility type
-us_mobility_data <- us_mobility_data %>%
+# Create dataframe of average mobility for everywhere in the US per date
+us_average_mobility <- processeddata %>%
+  group_by(date) %>%
+  summarise(
+    total_mobility_changes = mean(average_mobility, na.rm = TRUE),
+    transit_mean = mean(transit_stations_percent_change_from_baseline, na.rm = TRUE),
+    parks_mean = mean(parks_percent_change_from_baseline, na.rm = TRUE),
+    retail_mean = mean(retail_and_recreation_percent_change_from_baseline, na.rm = TRUE),
+    grocery_mean = mean(grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
+    workplaces_mean = mean(workplaces_percent_change_from_baseline, na.rm = TRUE),
+    residential_mean = mean(residential_percent_change_from_baseline, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  arrange(date) %>%  # Ensure dates are sorted
   mutate(
-    grocery_and_pharmacy_avg = rollmean(grocery_and_pharmacy_percent_change_from_baseline, 7, fill = NA, align = "right"),
-    transit_stations_avg = rollmean(transit_stations_percent_change_from_baseline, 7, fill = NA, align = "right"),
-    workplaces_avg = rollmean(workplaces_percent_change_from_baseline, 7, fill = NA, align = "right"),
-    residential_avg = rollmean(residential_percent_change_from_baseline, 7, fill = NA, align = "right")
+    transit_mean_7day = rollmean(transit_mean, k = 7, fill = NA, align = "right"),
+    parks_mean_7day = rollmean(parks_mean, k = 7, fill = NA, align = "right"),
+    retail_mean_7day = rollmean(retail_mean, k = 7, fill = NA, align = "right"),
+    grocery_mean_7day = rollmean(grocery_mean, k = 7, fill = NA, align = "right"),
+    workplaces_mean_7day = rollmean(workplaces_mean, k = 7, fill = NA, align = "right"),
+    residential_mean_7day = rollmean(residential_mean, k = 7, fill = NA, align = "right")
   )
 
-# Plot the 7-day moving averages for each mobility type
-mobility_graph <- ggplot(us_mobility_data, aes(x = Date)) +
-  geom_line(aes(y = grocery_and_pharmacy_avg, color = "Grocery & Pharmacy")) +
-  geom_line(aes(y = transit_stations_avg, color = "Transit Stations")) +
-  geom_line(aes(y = workplaces_avg, color = "Workplaces")) +
-  geom_line(aes(y = residential_avg, color = "Residential")) +
+# Plot the 7-day averages for each mobility type
+mobility_graph <- ggplot(us_average_mobility, aes(x = date)) +
+  geom_line(aes(y = grocery_mean_7day, color = "Grocery & Pharmacy")) +
+  geom_line(aes(y = transit_mean_7day, color = "Transit Stations")) +
+  geom_line(aes(y = workplaces_mean_7day, color = "Workplaces")) +
+  geom_line(aes(y = residential_mean_7day, color = "Residential")) +
+  geom_line(aes(y = parks_mean_7day, color = "Recreational")) +
   labs(
     title = "7-Day Moving Average of Percent Change in Mobility in the U.S. Over Time",
     x = "Date",
-    y = "7-Day Moving Average of Percent Change in Mobility",
+    y = "7-Day Average of Percent Change in Mobility",
     color = "Mobility Type"
   ) +
   theme_minimal()
 
 print(mobility_graph)
+
+# save graph
+figure_file = here("results","figures","mobilitygraph.png")
+ggsave(filename = figure_file, plot=mobility_graph)
 ```
-```{r}
-
-```
-
-
-We are saving the results to the `results` folder. Depending on how many tables/figures you have, it might make sense to have separate folders for each. And/or you could have separate folders for exploratory tables/figures and for final tables/figures. Just choose a setup that makes sense for your project and works for you, and provide enough documentation that someone can understand what you are doing.
-
-
-# Data exploration through figures
-
-Histogram plots for the continuous outcomes. 
-
-Height first.
-
-```{r}
-p1 <- mydata %>% ggplot(aes(x=Height)) + geom_histogram() 
-plot(p1)
-figure_file = here("results", "figures","height-distribution.png")
-ggsave(filename = figure_file, plot=p1) 
-```
-
-Now weights.
-
-```{r}
-p2 <- mydata %>% ggplot(aes(x=Weight)) + geom_histogram() 
-plot(p2)
-figure_file = here("results", "figures","weight-distribution.png")
-ggsave(filename = figure_file, plot=p2) 
-```
-
-Now height as function of weight.
-
-```{r}
-p3 <- mydata %>% ggplot(aes(x=Height, y=Weight)) + geom_point() + geom_smooth(method='lm')
-plot(p3)
-figure_file = here("results", "figures", "height-weight.png")
-ggsave(filename = figure_file, plot=p3) 
-```
-
-Once more height as function of weight, stratified by gender. Note that there is so little data, it's a bit silly. But we'll plot it anyway.
-
-```{r}
-p4 <- mydata %>% ggplot(aes(x=Height, y=Weight, color = Gender)) + geom_point() + geom_smooth(method='lm')
-plot(p4)
-figure_file = here("results", "figures", "height-weight-stratified.png")
-ggsave(filename = figure_file, plot=p4) 
-```
-
-
-
-# Notes
-
-For your own explorations, tables and figures can be "quick and dirty". As long as you can see what's going on, there is no need to polish them. That's in contrast to figures you'll produce for your final products (paper, report, presentation, website, etc.). Those should look as nice, polished and easy to understand as possible.
-
-

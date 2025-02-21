@@ -1,5 +1,5 @@
 ---
-title: "Utilizing Google's Mobility Report to predict outbreak dynamics"
+title: "Utilizing Google's Mobility Report to understand Infectious Disease Dynamics"
 author: "Vincent Nguyen"
 format:
   docx:
@@ -10,15 +10,9 @@ bibliography: ../../assets/dataanalysis-references.bib
 csl: ../../assets/american-journal-of-epidemiology.csl
 ---
 
-The structure below is one possible setup for a manuscript, or a general data analysis project (including the course project). Adjust as needed. You don't need to have exactly these sections, but the content covering those sections should be addressed.
-
 This uses MS Word as output format. [See here](https://quarto.org/docs/output-formats/ms-word.html) for more information. You can switch to other formats, like html or pdf. See [the Quarto documentation](https://quarto.org/) for other formats.
 
-```{r, echo=FALSE, message=FALSE}
-# load a few R packages
-library(here)
-library(knitr)
-```
+Some text was left from the template in order to adjust to any feedback given. The manuscript will be more fleshed out once the final project idea is approved.
 
 **Authors**
 
@@ -28,11 +22,7 @@ library(knitr)
 
 1.  College of Public Health, University of Georgia, Athens, GA, USA.
 
-$*$ These authors contributed equally to this work.
-
-$\land$ Corresponding author: some\@email.com
-
-$\dagger$ Disclaimer: The opinions expressed in this article are the author's own and don't reflect their employer.
+$\land$ Corresponding author: vln27447\@uga.edu
 
 {{< pagebreak >}}
 
@@ -56,7 +46,9 @@ Google's Community Mobility Reports are anonymized insights collected from Googl
 \
 The COVID-19 Data Repository by the Center for Systems Science and Engineering at Johns Hopkins University is a comprehensive data set that tracks global COVID-19 cases, recoveries, and deaths. It was updated regularly and compiles data from various official sources to support research.\
 
-The County Health Ranking is a data set that provides a comprehensive overview of various health factors and outcomes across U.S. counties. Data collected includes metrics on healthcare access, insurance coverage, income levels, violent crime, air and water quality, transportation access, and more.\
+The County Health Ranking is a data set that provides a comprehensive overview of various health factors and outcomes across U.S. counties. Data collected includes metrics on healthcare access, insurance coverage, income levels, violent crime, air and water quality, transportation access, and more. \[Not sure about the inclusion of this\]
+
+The CDC Vaccination hesitancy survey is a possible data set I could use to make the analysis more complex.\
 \
 \
 
@@ -68,13 +60,11 @@ Can mobility data, in combination with COVID-19 case counts, be used to forecast
 
 How do socio-economic and health factors influence the relationship between mobility patterns and COVID-19 infection rates across U.S. counties?
 
-Investigate if counties with similar health rankings but different mobility trends (or vice versa) experienced different outbreak severities, potentially revealing the effectiveness of local interventions \[reword\]
+Investigate if counties with similar health rankings but different mobility trends experienced different outbreak severities, potentially revealing the effectiveness of local interventions
 
-Examine the time lag between changes in mobility and subsequent changes in infection rates \[reword\]
+Examine ifthere was lag time between changes in mobility and subsequent changes in infection rates
 
 To cite other work (important everywhere, but likely happens first in introduction), make sure your references are in the bibtex file specified in the YAML header above and have the right bibtex key. Then you can include like this:
-
-Examples of reproducible research projects can for instance be found in [@mckay2020; @mckay2020a].
 
 {{< pagebreak >}}
 
@@ -85,13 +75,6 @@ Examples of reproducible research projects can for instance be found in [@mckay2
 ## Schematic of workflow
 
 Sometimes you might want to show a schematic diagram/figure that was not created with code (if you can do it with code, do it). @fig-schematic is an example of some - completely random/unrelated - schematic that was generated with Biorender. We store those figures in the `assets` folder.
-
-```{r}
-#| label: fig-schematic
-#| fig-cap: "A figure that is manually generated and shows some overview/schematic. This has nothing to do with the data, it's just a random one from one of our projects I found and placed here."
-#| echo: FALSE
-knitr::include_graphics(here("assets","antigen-recognition.png"))
-```
 
 ## Data acquisition
 
@@ -104,6 +87,7 @@ Since the pandemic spanned across 3 years, data on mobility was collected from 2
 The time series data has 3342 observations of 1154 variables. Each row represents a different city. The columns record cases as days progress and locational data like longitude and latitude.
 
 ```{r}
+library(here)
 
 # importing data
 mobility_data_2020 <- read.csv(here("data", "raw-data", "2020_US_Region_Mobility_Report.csv"))
@@ -122,54 +106,65 @@ chr_data_2024 <- read.csv(here("data", "raw-data", "chr_trends_csv_2024.csv"))
 
 ## Statistical analysis
 
-Possibly utilize the EpiModeling package to understand infectious disease dynamics based on the analysis and then simulate future outbreaks? I am not actually sure if this is a feasible use of the data.
-
 {{< pagebreak >}}
 
 # Results
 
 ## Exploratory/Descriptive analysis
 
-*Use a combination of text/tables/figures to explore and describe your data. Show the most important descriptive results here. Additional ones should go in the supplement. Even more can be in the R and Quarto files that are part of your project.*
-
-@tbl-summarytable shows a summary of the data.
-
-Note the loading of the data providing a **relative** path using the `../../` notation. (Two dots means a folder up). You never want to specify an **absolute** path like `C:\ahandel\myproject\results\` because if you share this with someone, it won't work for them since they don't have that path. You can also use the `here` R package to create paths. See examples of that below. I generally recommend the `here` package.
+To gain a clearer perspective on the overall scale of the pandemic, we visualized the total number of COVID-19 cases over time. This plot provides a overview of how case counts evolved.The graph reveals a large spike in cases in the beginning of 2022. This does correspond with figures further.
 
 ```{r}
-#| label: tbl-summarytable
-#| tbl-cap: "Data summary table."
+#| label: casecountplot
+#| fig-cap: "Total COVID-19 Cases overtime"
 #| echo: FALSE
-resulttable=readRDS("../../results/tables/summarytable.rds")
-knitr::kable(resulttable)
+knitr::include_graphics(here("results","figures","casecountplot.png"))
 ```
+
+To gain a clearer perspective on the overall scale of the pandemic, we visualized new caes of COVID-19 over time. This plot provides a overview of how case counts and infection evolved.The graph reveals a large spike in cases in the beginning of 2022 which corresponds with the total case count graph.
+
+```{r}
+#| label: incidenceplot
+#| fig-cap: "Daily New COVID-19 Cases overtime in the U.S."
+#| echo: FALSE
+knitr::include_graphics(here("results","figures","incidenceplot.png"))
+```
+
+To gain a deeper understanding of how mobiltiy patterns shifted throughout the pandemic, weekly changes in mobility were visualized. This plot highlights fluctuations in movement across various sectors. Mobility was increased towards residential and recreational areas which warrants further exploration. This can help offer insight into how behavior towards COVID-19 restriction interventions evolved over time.
+
+```{r}
+#| label: mobiltiygraph
+#| fig-cap: "Percent Changes in Mobility per week in the U.S."
+#| echo: FALSE
+knitr::include_graphics(here("results","figures","mobilitygraph.png"))
+```
+
+As hypothesized, an rise in COVID-19 case count is expected to lead to a decline in mobility to non-residential locations, as individuals alter their behavior in resposne to increasing risks. To explore this idea, total case count and changes in mobility were visualzied across the United States.\
+\
+
+```{r}
+#| label: casemap
+#| fig-cap: "Total COVID-19 Cases on 10/15/2022 mapped to the U.S."
+#| echo: FALSE
+knitr::include_graphics(here("results","figures","casemap.png"))
+```
+
+```{r}
+#| label: mobilitymap
+#| fig-cap: "Average of mobility changes on 10/15/2022 mapped to the U.S."
+#| echo: FALSE
+knitr::include_graphics(here("results","figures","mobilitymap.png"))
+```
+
+Analysis of the mapped data reveals a trend: states with higher case counts generally experienced more significant decreases in mobility. This suggests a correlation between rising COVID-19 case count and a greater reduction in movement to non-residential locations.
 
 ## Basic statistical analysis
 
 *To get some further insight into your data, if reasonable you could compute simple statistics (e.g. simple models with 1 predictor) to look for associations between your outcome(s) and each individual predictor variable. Though note that unless you pre-specified the outcome and main exposure, any "p\<0.05 means statistical significance" interpretation is not valid.*
 
-@fig-result shows a scatterplot figure produced by one of the R scripts.
-
-```{r}
-#| label: fig-result
-#| fig-cap: "Height and weight stratified by gender."
-#| echo: FALSE
-knitr::include_graphics(here("results","figures","height-weight-stratified.png"))
-```
-
 ## Full analysis
 
 *Use one or several suitable statistical/machine learning methods to analyze your data and to produce meaningful figures, tables, etc. This might again be code that is best placed in one or several separate R scripts that need to be well documented. You want the code to produce figures and data ready for display as tables, and save those. Then you load them here.*
-
-Example @tbl-resulttable2 shows a summary of a linear model fit.
-
-```{r}
-#| label: tbl-resulttable2
-#| tbl-cap: "Linear model fit table."
-#| echo: FALSE
-resulttable2 = readRDS(here("results","tables","resulttable2.rds"))
-knitr::kable(resulttable2)
-```
 
 {{< pagebreak >}}
 

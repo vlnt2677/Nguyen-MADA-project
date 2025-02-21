@@ -1,14 +1,9 @@
 #raw-data
 
-This folder should contain all raw data. As needed add sub-folders.
+The US_Region_Mobility_Report are files that contain Google's Mobility Report for these three years
 
-Currently, as an example, it contains a simple made-up data-set in an Excel file.
+The chr_trends_csv_2024 is the County Health Ranking which gives ratings to counties health systems (health insurance coverage, physicians, etc.) This file is currently not in use.
 
-The dataset contains the variables `Height`, `Weight` and `Gender` of a few imaginary individuals.
+The time_series_covid19_confirmed_US is the time series case count from John Hopkins University.
 
-The dataset purposefully contains some faulty entries that need to be cleaned.
-
-Generally, any dataset should contain some meta-data explaining what each variable in the dataset is. (This is often called a **Codebook**.) For this simple example, the codebook is given as a second sheet in the Excel file.
-
-This raw data-set should generally not be edited by hand. It should instead be loaded and processed/cleaned using code.
-
+The Vaccine_Hesitancy_for_COVID-19__County_and_local_estimates_20250220 file is currently not in use. This is a potential data set that could be added if needed.
