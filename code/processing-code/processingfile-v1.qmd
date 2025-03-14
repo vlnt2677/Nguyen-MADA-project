@@ -17,6 +17,8 @@ library(skimr)
 library(ggplot2)
 library(zoo)
 library(tidyr)
+library(lubridate)
+library(readxl)
 ```
 
 
@@ -37,6 +39,45 @@ time_series_covid <- read.csv(here("data", "raw-data", "time_series_covid19_conf
 # county health ranking
 chr_data_2024 <- read.csv(here("data", "raw-data", "chr_trends_csv_2024.csv"))
 
+# county population information
+ch_pop_data <- read_excel(here::here("data", "raw-data", "co-est2023-pop.xlsx"), skip = 3)
+```
+
+```{r}
+# Remove the second column
+ch_pop_data <- ch_pop_data[, -2]
+
+ch_pop_data <- ch_pop_data %>%
+  pivot_longer(
+    cols = c(`2020`,`2021`, `2022`, `2023`),    # Specify the year columns
+    names_to = "year",                    # Create a new column for the years
+    values_to = "population_count"              # Create a new column for population counts
+  )
+
+# Fix the first column
+ch_pop_data <- ch_pop_data %>%
+  mutate(
+    county = str_remove(`...1`, "^\\."),            
+    county = str_remove(county, "County"),     
+    county = str_to_lower(county),                  
+    state = str_extract(county, "(?<=,).*"),        
+    county = str_remove(county, ",.*")              
+  ) %>%
+  mutate(
+    state = str_to_lower(str_trim(state))           
+  )
+
+# Change year column to be double for joining later
+ch_pop_data$year <- as.double(ch_pop_data$year)
+
+
+# Clean names to prepare for joining
+ch_pop_data <- ch_pop_data %>%
+  mutate(
+    county = str_trim(str_to_lower(county)),  
+    state = str_trim(str_to_lower(state))     
+  )
+
 ```
 
 After visually inspecting the mobility data, I noticed that many mobility changes were missing. The following code seeks to quantify this.
@@ -54,6 +95,58 @@ sapply(combined_mobility_data[c("transit_stations_percent_change_from_baseline",
 
 ```
 # Cleaning and Wrangling
+
+This section looks through the CHR data
+
+```{r}
+# First need to filter out the data for what years we are interested in
+unique(chr_data_2024$yearspan)
+
+# Based on this, we are most interested in 2020-2022 because of its overlap with the other data.
+chr_data_filtered <- filter(chr_data_2024, yearspan %in% c("2020", "2021", "2022"))
+
+# Change yearspan to be a double. This is important for joining all the data frames later.
+chr_data_filtered$yearspan <- as.double(chr_data_filtered$yearspan)
+
+# Now we need to decide what meausre interest us the most
+unique(chr_data_filtered$measurename)
+
+# We chose uninsured adults as an indicator of access to healthcare (this is listed in the website)
+chr_data_filtered <- filter(chr_data_filtered, measurename == "Uninsured adults")
+
+
+# rename the counties to prep for dataframe joining
+chr_data_filtered <- chr_data_filtered %>%
+  mutate(
+    county = tolower(county),  # Convert 'county' to lowercase
+    county = gsub(" county", "", county), # removes the word county
+    uninsured_rate = (numerator / denominator) * 100000) # uninsured rate per 100,000
+
+
+# Check if counties have same names across different staes
+duplicates <- chr_data_filtered %>%
+  group_by(county, state) %>%
+  tally() %>%
+  filter(n > 1)
+
+# View the duplicates and looks like there is... need to deal with this if I want to join the data with the other data
+print(duplicates)
+
+# Change abbreviated state names into the full name so I can join them easier
+
+# Create a mapping for state abbreviations to full names and convert the full names to lowercase
+state_mapping <- data.frame(
+  state_abbr = c("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"),
+  state_full = tolower(c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"))
+)
+
+# Convert state abbreviation to full name in chr_data_2024
+chr_data_filtered <- chr_data_filtered %>%
+  left_join(state_mapping, by = c("state" = "state_abbr"))
+
+
+
+```
 
 By inspecting the data, some problems become apparent. AS mentioned above, the Mobility Report is missing a tremendous amount of values. The Time Series data and Mobility Report are structured in entirely different ways. Joining the two will be difficult without mutating one. I chose to change the Time Series data. 
 
@@ -123,8 +216,18 @@ merged_df_clean <- merged_df_clean %>%
     na.rm = TRUE)) %>%
   ungroup()
 
-```
+merged_df_clean <- merged_df_clean %>%
+  mutate(year = year(date)) %>%
+  left_join(chr_data_filtered %>% select(state_full, county, uninsured_rate, yearspan), 
+            by = c("state" = "state_full", "county" = "county", "year" = "yearspan"))
 
+merged_df_clean <- merged_df_clean %>%
+  left_join(
+    ch_pop_data %>% 
+      select(year, population_count, county, state),
+    by = c("state" = "state", "county" = "county", "year" = "year")
+  )
+```
 
 All done, data is clean now. 
 

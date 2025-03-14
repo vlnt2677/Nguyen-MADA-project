@@ -6,17 +6,13 @@ format:
     toc: false
     number-sections: true
     highlight-style: github
-bibliography: ../../assets/dataanalysis-references.bib
+bibliography: ../../assets/MADA.bib
 csl: ../../assets/american-journal-of-epidemiology.csl
 ---
 
-This uses MS Word as output format. [See here](https://quarto.org/docs/output-formats/ms-word.html) for more information. You can switch to other formats, like html or pdf. See [the Quarto documentation](https://quarto.org/) for other formats.
-
-Some text was left from the template in order to adjust to any feedback given. The manuscript will be more fleshed out once the final project idea is approved.
-
 **Authors**
 
--   Vincent Nguyen$^{1}$ (ORCID: 0000-0000-1234-5678)
+-   Vincent Nguyen$^{1}$
 
 **Author affiliations**
 
@@ -34,9 +30,19 @@ $\land$ Corresponding author: vln27447\@uga.edu
 
 # Introduction
 
-## General Background Information
+The emergence of the novel corona-virus SARS-CoV-2 caused one of the most significant global health crises in modern history. First identified in Wuhan, China, in late 2019, the virus’s transmissibility and globalism led to its rapid spread worldwide, to leading the World Health Organization to declare it a pandemic on March 11, 2020. Just two days later, on March 13th, 2020, the Trump Administration declared a nationwide emergency due to the COVID-19 pandemic, marking the biggest virus outbreak since \_\_\_. In response, public health agencies implemented measures to curb the virus’ spread including travel restrictions, social distancing, and lockdown procedures (CDC 2024)[@centersfordiseasecontrolandprevention_2024_covid19].
 
-Understanding the spread of infectious diseases is crucial for public health preparedness and response. Disease infection dynamics are shaped by multiple factors, including population movement, the pathogen itself, and public health interventions. Mobility is considered a key driver of human interactions and thus a primary vehicle for transmission potential. The COVID-19 pandemic provides a great example of how changes in mobility, driven by policies and public health measures, influenced infection rates.
+\[insert stats about pandemic\]
+
+### 2.2 Lockdown and Social Distancing
+
+Nonpharmacological interventions are among the measures public health officials utilize to help curb the transmission of infectious diseases. In lieu of medication or vaccinations, these interventions can be a cost-effective and population-based solution. These interventions include the use of isolation, the subdivision of an infected individual from the general population, and social distancing, a form of voluntary or mandated physical distancing from others. Another common measure is the use of quarantine, which is the restriction of infected or at-risk individuals from traveling to help minimize the risk of healthy individuals; it is intended that the period of transmissibility has passed before lifting the quarantine (Jacobsen and Jacobsen 2020)[@jacobsen_2020_statewide]. 
+
+Uniquely, the COVID-19 pandemic utilized a new form of physical distancing measures which was known as stay-at-home orders and colloquially, lockdowns. Lockdowns involved stringent stay-at-home orders, closure of non-essential businesses, and restrictions on public gatherings. By April 3rd, 2020, just a few weeks after California’s state-wide mandate, 41 states joined the directive in restricting mobility (Mervosh et al. 2020)[@mervosh_2020_see]. Many polictians and citizens questioned the measure citing a lack of evidence for its efficacy; looking at the Wikipedia page shows a lack of prior history implementing lockdowns (Zeleny et al. 2021)[@zeleny_2021_a].
+
+### 2.3 Mobility Dynamics
+
+According to Paltra et al. 2021, mobility reductions on COVID-19 can be quadratic in reducing the transmission. For example, the authors state a reduction of out-of-home duration to 70% can result in a transmission rate of 0.49. \[finish\]
 
 ## Description of data and data source
 
@@ -47,10 +53,6 @@ Google's Community Mobility Reports are anonymized insights collected from Googl
 The COVID-19 Data Repository by the Center for Systems Science and Engineering at Johns Hopkins University is a comprehensive data set that tracks global COVID-19 cases, recoveries, and deaths. It was updated regularly and compiles data from various official sources to support research.\
 
 The County Health Ranking is a data set that provides a comprehensive overview of various health factors and outcomes across U.S. counties. Data collected includes metrics on healthcare access, insurance coverage, income levels, violent crime, air and water quality, transportation access, and more. \[Not sure about the inclusion of this\]
-
-The CDC Vaccination hesitancy survey is a possible data set I could use to make the analysis more complex.\
-\
-\
 
 ## Questions/Hypotheses to be addressed
 
