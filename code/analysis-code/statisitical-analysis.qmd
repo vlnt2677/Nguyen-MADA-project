@@ -39,34 +39,6 @@ class(data$new_cases)
 ```
 
 ```{r}
-# Some quick data fixing before analysis as some models cannot handle negatives (contextually ok, more interested in NEW cases)
-data_clean <- data
-data_clean$new_cases[data_clean$new_cases < 0] <- 0
-data_clean$new_cases[is.na(data_clean$new_cases)] <- 0
-data_clean$incidence_rate[is.na(data_clean$incidence_rate)] <- 0
-
-data_clean <- na.omit(data_clean)
-
-# In my intial analyses, there were an absurd amount of zeroes; this was most likely due to the data sets capturing days prior to the pandemic.
-last_case_date <- as.Date("2022-01-01")
-first_case_date <- as.Date("2020-03-02") 
-
-df_clean <- data_clean %>%
-  filter(date >= first_case_date) %>%
-  filter(date <= last_case_date) %>%
-  group_by(county) 
-  
-df_clean <- df_clean %>%
-  as_tibble() %>%
-  select(-geometry)
-
-df_clean <- df_clean %>% 
-  mutate(new_cases = as.integer(df_clean$new_cases))
-
-class(df_clean$new_cases)
-```
-
-```{r}
 # Intial Recipe setting
 recipe <- recipe(new_cases ~ pop_density + transit_stations_percent_change_from_baseline + 
                      parks_percent_change_from_baseline + 
@@ -93,7 +65,7 @@ lm_wf <- workflow() %>%
 
 lm_fit <- lm_wf %>%
   add_model(lm_spec) %>%
-  fit(data = df_clean)
+  fit(data = data)
 
 lm_fit %>%
   extract_fit_parsnip() %>%
@@ -103,9 +75,9 @@ lm_fit %>%
   extract_fit_parsnip() %>%
   broom::glance()
 
-lm_preds<- predict(lm_fit, new_data = df_clean)
+lm_preds<- predict(lm_fit, new_data = data)
 
-lm_metrics <- tibble(truth = df_clean$new_cases, predicted = lm_preds$.pred) %>%
+lm_metrics <- tibble(truth = data$new_cases, predicted = lm_preds$.pred) %>%
   metrics(truth = truth, estimate = predicted)
 lm_metrics
 ```
@@ -122,7 +94,7 @@ lasso_wf <- workflow() %>%
 
 lasso_fit <- lasso_wf %>%
   add_model(lasso_spec) %>%
-  fit(data = df_clean)
+  fit(data = data)
 
 lasso_fit %>%
   extract_fit_parsnip() %>%
@@ -132,9 +104,9 @@ lasso_fit %>%
   extract_fit_parsnip() %>%
   broom::glance()
 
-lasso_preds<- predict(lasso_fit, new_data = df_clean)
+lasso_preds<- predict(lasso_fit, new_data = data)
 
-lasso_metrics <- tibble(truth = df_clean$new_cases, predicted = lasso_preds$.pred) %>%
+lasso_metrics <- tibble(truth = data$new_cases, predicted = lasso_preds$.pred) %>%
   metrics(truth = truth, estimate = predicted)
 lasso_metrics
 ```
@@ -189,7 +161,9 @@ set.seed(1234)
 # Note: Limitation of computing power so doing rolling window would not work
 cv_folds <- vfold_cv(data, v = 5, repeats = 5)
 plan(multisession, workers = 4)
+
 # Tune the forest
+# This step took 20-ish minutes
 forest_tune_res <- tune_grid(
   forest_wf %>% add_model(forest_spec),
   resamples = cv_folds,  
@@ -204,7 +178,7 @@ autoplot(forest_tune_res)
 forest_tune_res %>%
   collect_metrics()
 
-best_params <- select_best(forest_tune_res, metric = "rmse")  # Or "rsq"
+best_params <- select_best(forest_tune_res, metric = "rmse")
 best_params
 
 best_params$trees <- 500
@@ -227,7 +201,7 @@ forest_fit_final <- forest_wf %>%
 forest_preds_final <- predict(forest_fit_final, new_data = data)
 forest_preds_final <- tibble(truth = data$new_cases, predicted = forest_preds_final$.pred)
 
-# Calculate performance metrics (RMSE, R², etc.)
+# Calculate performance metrics
 forest_rmse <- forest_preds_final %>%
   metrics(truth = truth, estimate = predicted)
 
