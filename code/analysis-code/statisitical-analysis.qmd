@@ -1,0 +1,236 @@
+---
+title: "Analysis Script"
+author: "Vincent Nguyen"
+date: "2025-02-21"
+output: html_document
+---
+
+# Setup
+
+Load needed packages. make sure they are installed.
+
+```{r}
+library(ggplot2) 
+library(broom) 
+library(here) 
+library(glmnet)
+library(MASS)
+library(tidymodels)
+library(dplyr)
+library(rsample)
+library(poissonreg)
+library(parsnip)
+library(future)
+```
+
+```{r}
+#path to data
+#note the use of the here() package and not absolute paths
+data_location <- here::here("data","processed-data","processeddata.rds")
+
+#load data. 
+data <- readRDS(data_location)
+
+# NOTES TO SELF
+# - change to QMD file (personally prefer)
+# - work on other analysis (lag-time & quarantine fatigue? more research)
+# - work on inclusion of county health ranking data or possibly not include at all? lots of mismatch counties between datasets
+class(data$new_cases)
+```
+
+```{r}
+# Some quick data fixing before analysis as some models cannot handle negatives (contextually ok, more interested in NEW cases)
+data_clean <- data
+data_clean$new_cases[data_clean$new_cases < 0] <- 0
+data_clean$new_cases[is.na(data_clean$new_cases)] <- 0
+data_clean$incidence_rate[is.na(data_clean$incidence_rate)] <- 0
+
+data_clean <- na.omit(data_clean)
+
+# In my intial analyses, there were an absurd amount of zeroes; this was most likely due to the data sets capturing days prior to the pandemic.
+last_case_date <- as.Date("2022-01-01")
+first_case_date <- as.Date("2020-03-02") 
+
+df_clean <- data_clean %>%
+  filter(date >= first_case_date) %>%
+  filter(date <= last_case_date) %>%
+  group_by(county) 
+  
+df_clean <- df_clean %>%
+  as_tibble() %>%
+  select(-geometry)
+
+df_clean <- df_clean %>% 
+  mutate(new_cases = as.integer(df_clean$new_cases))
+
+class(df_clean$new_cases)
+```
+
+```{r}
+# Intial Recipe setting
+recipe <- recipe(new_cases ~ pop_density + transit_stations_percent_change_from_baseline + 
+                     parks_percent_change_from_baseline + 
+                     retail_and_recreation_percent_change_from_baseline + 
+                     grocery_and_pharmacy_percent_change_from_baseline +
+                     workplaces_percent_change_from_baseline + 
+                     residential_percent_change_from_baseline +
+                     health_factor_rank, data = data)
+  
+
+
+
+```
+
+First, I created a linear regression model as the baseline standard. This model performs very poorly as it has a low R-squared, indicating low predictive power. The model does mark all variables of the model to be significant.Additionally, the AIC is very extremely high.
+
+```{r}
+# Create linear regression model
+lm_spec <- linear_reg() %>%
+  set_engine("lm")
+
+lm_wf <- workflow() %>%
+  add_recipe(recipe)
+
+lm_fit <- lm_wf %>%
+  add_model(lm_spec) %>%
+  fit(data = df_clean)
+
+lm_fit %>%
+  extract_fit_parsnip() %>%
+  tidy()
+
+lm_fit %>%
+  extract_fit_parsnip() %>%
+  broom::glance()
+
+lm_preds<- predict(lm_fit, new_data = df_clean)
+
+lm_metrics <- tibble(truth = df_clean$new_cases, predicted = lm_preds$.pred) %>%
+  metrics(truth = truth, estimate = predicted)
+lm_metrics
+```
+
+I utilized Lasso here to hopefully bring down the RMSE and bring up the rsquared. It seems Lasso has no effect on model performance as the data lacks multicolinearity and does not have irrelevant predictors. 
+```{r}
+# Set method for LASSO
+lasso_spec <- linear_reg(penalty = 0.1, mixture = 1) %>%
+  set_engine("glmnet")
+
+# Insert recipe
+lasso_wf <- workflow() %>%
+  add_recipe(recipe)
+
+lasso_fit <- lasso_wf %>%
+  add_model(lasso_spec) %>%
+  fit(data = df_clean)
+
+lasso_fit %>%
+  extract_fit_parsnip() %>%
+  tidy()
+
+lasso_fit %>%
+  extract_fit_parsnip() %>%
+  broom::glance()
+
+lasso_preds<- predict(lasso_fit, new_data = df_clean)
+
+lasso_metrics <- tibble(truth = df_clean$new_cases, predicted = lasso_preds$.pred) %>%
+  metrics(truth = truth, estimate = predicted)
+lasso_metrics
+```
+
+After the last two models performed poorly, the use of random forest seemed rational as this model can capture more complex relationships. 
+```{r}
+
+rngseed = 1234
+
+forest_spec <- rand_forest(mode = "regression") %>%
+  set_engine("ranger", seed = rngseed)
+
+# Insert recipe
+forest_wf <- workflow() %>%
+  add_recipe(recipe)
+
+# Create model with all predictors and random forest
+forest_fit <- forest_wf %>%
+ add_model(forest_spec) %>%
+  fit(data = data)
+
+
+forest_preds <- predict(forest_fit, new_data = data)
+forest_preds <- tibble(truth = data$new_cases, predicted = forest_preds$.pred)
+forest_rmse <- forest_preds %>%
+  metrics(truth = truth, estimate = predicted)
+print(forest_rmse)
+```
+
+
+```{r}
+# Tuning forest
+forest_spec <- rand_forest(
+  mode = "regression", 
+  trees = 300, 
+  mtry = tune(), 
+  min_n = tune()
+) %>%
+  set_engine("ranger")
+
+# Create grid with set parameters
+forest_grid <- grid_regular(
+  mtry(range = c(1, 7)),  
+  min_n(range = c(1, 21)),  
+  levels = 7  
+)
+
+# Set seed
+set.seed(1234)
+
+# 5 fold crossvalidation repeated 5 times
+# Note: Limitation of computing power so doing rolling window would not work
+cv_folds <- vfold_cv(data, v = 5, repeats = 5)
+plan(multisession, workers = 4)
+# Tune the forest
+forest_tune_res <- tune_grid(
+  forest_wf %>% add_model(forest_spec),
+  resamples = cv_folds,  
+  grid = forest_grid,
+  metrics = metric_set(rmse, rsq),
+  control = control_grid(parallel_over = "everything")
+)
+
+# Plot results
+autoplot(forest_tune_res)
+
+forest_tune_res %>%
+  collect_metrics()
+
+best_params <- select_best(forest_tune_res, metric = "rmse")  # Or "rsq"
+best_params
+
+best_params$trees <- 500
+```
+
+```{r}
+forest_spec <- rand_forest(
+  mode = "regression",
+  mtry = best_params$mtry,
+  trees = best_params$trees,
+  min_n = best_params$min_n
+) %>%
+  set_engine("ranger", seed = 1234)
+
+forest_fit_final <- forest_wf %>%
+  add_model(forest_spec) %>%
+  fit(data = data)
+
+# Get final predictions
+forest_preds_final <- predict(forest_fit_final, new_data = data)
+forest_preds_final <- tibble(truth = data$new_cases, predicted = forest_preds_final$.pred)
+
+# Calculate performance metrics (RMSE, R², etc.)
+forest_rmse <- forest_preds_final %>%
+  metrics(truth = truth, estimate = predicted)
+
+print(forest_rmse)
+```
+
