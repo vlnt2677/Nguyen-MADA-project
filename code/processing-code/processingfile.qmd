@@ -7,26 +7,26 @@ output: html_document
 
 # Setup
 
-Load needed packages. make sure they are installed.
+Load needed packages. Make sure they are installed.
 
 ```{r}
 # load needed packages
 library(here) 
 library(dplyr)
-library(skimr)
-library(ggplot2)
-library(zoo)
 library(tidyr)
 library(lubridate)
 library(readxl)
 library(stringr)
-```
+library(skimr)
 
+library(tigris)
+library(sf)
+```
 
 # Data loading
 
 ```{r}
-# google data is in three parts
+#Google data is in three parts; load and join
 mobility_data_2020 <- read.csv(here("data", "raw-data", "2020_US_Region_Mobility_Report.csv")) %>%
   filter(sub_region_1 == "Georgia")
 mobility_data_2021 <- read.csv(here("data", "raw-data", "2021_US_Region_Mobility_Report.csv"))%>%
@@ -34,65 +34,31 @@ mobility_data_2021 <- read.csv(here("data", "raw-data", "2021_US_Region_Mobility
 mobility_data_2022 <- read.csv(here("data", "raw-data", "2022_US_Region_Mobility_Report.csv"))%>%
   filter(sub_region_1 == "Georgia")
 
+# Combine columns and remove irrelevant rows
 combined_mobility_data <- bind_rows(mobility_data_2020, mobility_data_2021, mobility_data_2022)
 
 # jhk covid time series cases
 time_series_covid <- read.csv(here("data", "raw-data", "time_series_covid19_confirmed_US.csv")) %>%
   filter(Province_State == "Georgia")
 
-# county health ranking
-#hr_data_2024 <- read.csv(here("data", "raw-data", "chr_trends_csv_2024.csv")) %>%
-#  filter(state == "GA")
-
 # county population information
 ch_pop_data <- read_excel(here::here("data", "raw-data", "co-est2023-pop.xlsx"), skip = 3)
 
-# Load in CHR Data from 2020 to 2022, remove the first column, remove first two rows, add a year column, and also rename the columns
-
-chr_2020 <- read_excel(here::here("data", "raw-data", "2020 County Health Rankings Georgia Data - v1_0.xlsx"), sheet = 2, skip = 2) %>% select(-1) %>% mutate(year = 2020)
-
-chr_2020 <- chr_2020 %>%
-  rename(
-    state = `Georgia`,
-    county = `...3`,
-    health_outcome_zscore = `...4`,
-    health_outcome_rank = `...5`,
-    health_factor_zscore = `...6`,
-    health_factor_rank = `...7`
-  ) 
-
-chr_2021 <- read_excel(here::here("data", "raw-data", "2021 County Health Rankings Georgia Data - v1.xlsx"), sheet = 2, skip = 2)%>% select(-1) %>% mutate(year = 2021)
-
-chr_2021 <- chr_2021 %>%
-  rename(
-    state = `Georgia`,
-    county = `...3`,
-    health_outcome_zscore = `...4`,
-    health_outcome_rank = `...5`,
-    health_factor_zscore = `...6`,
-    health_factor_rank = `...7`
-  )
-
-chr_2022 <- read_excel(here::here("data", "raw-data", "2022 County Health Rankings Georgia Data - v2.xlsx"), sheet = 2, skip = 2)%>% select(-1) %>% mutate(year = 2022)
-
-chr_2022 <- chr_2022 %>%
-  rename(
-    state = `Georgia`,
-    county = `...3`,
-    health_outcome_zscore = `...4`,
-    health_outcome_rank = `...5`,
-    health_factor_zscore = `...6`,
-    health_factor_rank = `...7`
-  )
-
-# Combine all CHR data sets into one
-combined_chr <- bind_rows(chr_2020, chr_2021, chr_2022)
 ```
+
+# Cleaning and Wrangling
+
+For this cleaning file, the workflow focused on preparing the data frames for joining and cleaning out columns as joins and mutations occurred.\
+
+## County Population Information
+
+The county population count data was first. Unnecessary rows were identified through the Rstudio view() feature and removed. Also, the data was converted into a long format for easy joining and analysis later.
 
 ```{r}
 # Remove the second column
 ch_pop_data <- ch_pop_data[, -2]
 
+# Convert to a long format
 ch_pop_data <- ch_pop_data %>%
   pivot_longer(
     cols = c(`2020`,`2021`, `2022`, `2023`),    
@@ -124,22 +90,42 @@ ch_pop_data <- ch_pop_data %>%
     state = str_trim(str_to_lower(state))     
   )
 
-
 # Only include Georgia counties
 ch_pop_data <- ch_pop_data %>%
   filter(state == "georgia") 
 
 ```
 
+## Google Community Mobility Reports
 
-# Cleaning and Wrangling
+Next, upon visual inspection in preparation for joining, it became apparent that the mobility report had many missing values. To quantify this, NA values were counted across columns and skim() was used.
 
-By inspecting the data, some problems become apparent. AS mentioned above, the Mobility Report is missing a tremendous amount of values. The Time Series data and Mobility Report are structured in entirely different ways. Joining the two will be difficult without mutating one. I chose to change the Time Series data. 
+After noticing a lack of data in the transit and parks category, they were removed. This does remove some important info, however, the completeness of the data was priortized instead. Additionally, not all incomplete rows were removed so completeness can be assessed later.
 
-Next, we also can see that the naming scheme of the columns differ so we need to standardize that as well.
+The data frame was also cleaned and prepared for joining.
 
-Lastly, both datasets do not have the same range in dates
+```{r}
+# Get a glimpse at what data is complete
+colSums(is.na(combined_mobility_data))
 
+skim(combined_mobility_data)
+
+# Ok it is clear that some locations are absent from GA as a whole. Based on my own knowledge and this data, I should consider removing transit stations as public transit is not common in GA. Additionally, interestingly, parks are absent. Perhaps Google defines parks differently? For now, I will remove the category of mobility. I deal with completeness later in the code.
+combined_mobility_data <- combined_mobility_data %>% 
+  dplyr::select(-transit_stations_percent_change_from_baseline, -parks_percent_change_from_baseline)
+
+# Prepare mobility report data for joining
+mobility_df <- combined_mobility_data %>%
+  rename(county = sub_region_2, state = sub_region_1) %>%
+  mutate(county = tolower(county), 
+         state = tolower(state),
+         county = gsub(" county$", "", county),  # Remove "county" from county name
+         date = as.Date(date, format = "%Y-%m-%d"))  # Correct format for "YYYY-MM-DD"
+```
+
+## John Hopkins Case Count Time Series
+
+Lastly, the JHU data was prepared. After inspection, it is clear that the Time Series data is wide while the Mobility Report is long. For easier analysis and joining, the Time Series data was converted into a long format using pivot_longer().
 
 ```{r}
 
@@ -158,15 +144,15 @@ cases_long <- time_series_covid %>%
 cases_long <- cases_long %>%
   rename(county = Admin2, state = Province_State) %>%
   mutate(county = tolower(county), state = tolower(state))
+```
 
-mobility_df <- combined_mobility_data %>%
-  rename(county = sub_region_2, state = sub_region_1) %>%
-  mutate(county = tolower(county), 
-         state = tolower(state),
-         county = gsub(" county$", "", county),  # Remove "county" from county name
-         date = as.Date(date, format = "%Y-%m-%d"))  # Correct format for "YYYY-MM-DD"
+## Filtering and Joining
 
+After preparing the data sets and visual inspection, it was clear the dates for the data sets differed. The view() feature in Rstudio was used to find the overlap.
 
+Once filtered, all three data sets were joined, an incidence per 10k column was added, and more column dropping occurred.
+
+```{r}
 # Filter cases_long and mobility_df based on the date range
 cases_long_filtered <- cases_long %>%
   filter(date >= "2020-02-15" & date <= "2022-10-15")
@@ -178,54 +164,33 @@ mobility_df_filtered <- mobility_df %>%
 merged_df <- cases_long_filtered %>%
   inner_join(mobility_df_filtered, by = c("county", "state", "date"))
 
-# Finally, remove any rows missing mobility changes to ensure consistency. We also have a lot of data values so I deemed it permissible.
-#merged_df_clean <- merged_df %>%
-#  drop_na(c(transit_stations_percent_change_from_baseline, parks_percent_change_from_baseline, retail_and_recreation_percent_change_from_baseline, grocery_and_pharmacy_percent_change_from_baseline,workplaces_percent_change_from_baseline, residential_percent_change_from_baseline))
-merged_df_clean <- merged_df
 # Additionally, add a column about new cases for further analysis down the line.
-merged_df_clean <- merged_df_clean %>%
+merged_df<- merged_df %>%
   arrange(state, county, date) %>%  
   group_by(state, county) %>%  
   mutate(new_cases = c(NA, diff(total_cases))) %>%  
   ungroup()  
 
-# Create column for mean average mobiltiy change for that given day and location. I omitted mobility changes to residencies because that may be more of an indication of who is at home.
-merged_df_clean <- merged_df_clean %>%
-  arrange(state, county, date) %>%  # Sort to ensure correct calculations
-  group_by(state, county) %>%  # Group by state and county
-  mutate(average_mobility = rowMeans(
-    cbind(transit_stations_percent_change_from_baseline, 
-          parks_percent_change_from_baseline, 
-          retail_and_recreation_percent_change_from_baseline, 
-          grocery_and_pharmacy_percent_change_from_baseline, 
-          workplaces_percent_change_from_baseline), 
-    na.rm = TRUE)) %>%
-  ungroup()
-
-merged_df_clean <- merged_df_clean %>%
+# Join the county population count data
+merged_df<- merged_df %>%
   mutate(year = year(date)) %>%
   left_join(
-    combined_chr %>%
-      mutate(across(c(state, county), str_to_lower)),  # Convert state and county to lowercase
-    by = c("state", "county", "year")
-  )
-
-merged_df_clean <- merged_df_clean %>%
-  left_join(
     ch_pop_data %>% 
-      select(year, population_count, county, state),
+      dplyr::select(year, population_count, county, state),
     by = c("state" = "state", "county" = "county", "year" = "year")
   )
 
 # Create column for incidence rate per 10,000 (10,000 because numbers tend to be small when per 100k)
-merged_df_clean <- merged_df_clean %>%
+merged_df <- merged_df %>%
   mutate(incidence_rate = (new_cases / population_count) * 10000)
 
 # Clean up and Removal of unnecessary columns
-merged_df_clean <- merged_df_clean %>% select(-UID, -iso2, -iso3, -code3, -country_region_code, -country_region, -metro_area, -iso_3166_2_code, -census_fips_code, -place_id)
+merged_df <- merged_df %>% dplyr::select(-UID, -iso2, -iso3, -code3, -country_region_code, -country_region, -iso_3166_2_code, -place_id, -census_fips_code, -metro_area, -FIPS, -Lat, -Long_, -Combined_Key)
 ```
 
-This code chunk entails the creation of a population density column in the data.
+## Implementation of SF Package for Population Density Calculation
+
+To help explain transmission patterns, population density was calculated using the shape files found in the package, sf.
 
 ```{r}
 library(tigris)
@@ -249,53 +214,88 @@ ga_counties <- ga_counties %>%
 # Compute population density (people per km²) and remove unnecessary data
 ga_counties <- ga_counties %>%
   mutate(pop_density = population_count / area_km2) %>%
-  select(pop_density, year, NAME)
+  dplyr::select(pop_density, year, NAME)
 
-# Add in population density column
-merged_df_clean <- merged_df_clean %>%
-  left_join(ga_counties, by = c("county" = "NAME", "year" = "year"))
+# Add in population density column and remove the geometry from the df
+merged_df <- merged_df %>%
+  left_join(ga_counties, by = c("county" = "NAME", "year" = "year")) %>%
+  as_tibble() %>%
+  dplyr::select(-geometry)
+
 ```
+
+## Additional Cleaning and Filtering
+
+This code chunk focuses on cleaning some of the values to not be NA and some final filtering.
+
 ```{r}
 # Clean negative and NA values
-merged_df_clean$new_cases[merged_df_clean$new_cases < 0] <- 0
-merged_df_clean$new_cases[is.na(merged_df_clean$new_cases)] <- 0
-merged_df_clean$incidence_rate[is.na(merged_df_clean$incidence_rate)] <- 0
+merged_df$new_cases[merged_df$new_cases < 0] <- 0
+merged_df$new_cases[is.na(merged_df$new_cases)] <- 0
+merged_df$incidence_rate[is.na(merged_df$incidence_rate)] <- 0
 
-# Remove any remaining NA values
-merged_df_clean <- na.omit(merged_df_clean)
+# Filter for 2 years (outside of this range generally is 0)
+last_case_date <- as.Date("2022-03-14")
+first_case_date <- as.Date("2020-03-14") 
 
-# Filter for pandemic period
-last_case_date <- as.Date("2022-01-01")
-first_case_date <- as.Date("2020-03-02") 
-
-merged_df_clean <- merged_df_clean %>%
+merged_df <- merged_df %>%
   filter(date >= first_case_date) %>%
   filter(date <= last_case_date) %>%
   group_by(county) 
 
-# Convert to tibble and remove geometry
-merged_df_clean <- merged_df_clean %>%
-  as_tibble() %>%
-  select(-geometry)
-
 # Convert new_cases to integer
-merged_df_clean <- merged_df_clean %>% 
+merged_df<- merged_df %>% 
   mutate(new_cases = as.integer(new_cases))
+
 ```
 
-All done, data is clean now. 
+## Evaluation and Filtering for Completeness of Data
 
-Let's assign at the end to some final variable, this makes it easier to add further cleaning steps above.
+As a final step, missing values in the mobility data were addressed by evaluating the completeness of each county's observations; the focus was placed on identifying days in which all mobility metrics were reported. Counties with a high proportion of incomplete records were excluded, as these gaps could mask meaningful trends and introduce bias. To mitigate this issue, counties with less than 80% data completeness were removed to support more robust and reliable analyses.
 
 ```{r}
-processeddata <- merged_df_clean
+# check the completeness by county
+completeness_by_county <- merged_df %>%
+  dplyr::select(retail_and_recreation_percent_change_from_baseline,  
+                grocery_and_pharmacy_percent_change_from_baseline,
+                workplaces_percent_change_from_baseline,
+                residential_percent_change_from_baseline) %>%
+  group_by(county) %>%
+  rowwise() %>%
+  mutate(row_complete = all(!is.na(c_across(everything())))) %>%
+  ungroup() %>%
+  group_by(county) %>%
+  summarise(
+    total_rows = n(),
+    complete_rows = sum(row_complete),  # Count of rows that are complete
+    completeness_rate = complete_rows / total_rows  # Proportion of complete rows
+  ) %>%
+  arrange(desc(completeness_rate))
+
+# Set the completeness threshold of 80%
+completeness_threshold <- 0.80
+
+# Filter counties based on the completeness rate
+counties_to_include <- completeness_by_county %>%
+  filter(completeness_rate >= completeness_threshold) %>%
+  pull(county)
+
+# Filter the dataset to include only counties with at least 80% completeness
+merged_df_clean <- merged_df %>%
+  filter(county %in% counties_to_include)
 ```
 
+The cleaning and wrangling process is complete.
 
-# Save data 
+To summarize, the three data sets were joined, cleaned, filtered, and mutated to create columns (population density and incidence) for analysis later.
+
+# Save data
 
 ```{r}
 save_data_location <- here::here("data","processed-data","processeddata.rds")
-saveRDS(processeddata, file = save_data_location)
-```
+saveRDS(merged_df_clean, file = save_data_location)
 
+# Saved a more complete case data set for visualizations
+save_data_location <- here::here("data","processed-data","processedcasedata.rds")
+saveRDS(cases_long_filtered, file = save_data_location)
+```

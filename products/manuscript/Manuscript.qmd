@@ -1,5 +1,5 @@
 ---
-title: "Utilizing Google's Mobility Report to understand Infectious Disease Dynamics"
+title: "Assessing the Added Predictive Power of Google's Community Mobility Report for COVID-19 Forecasting on a County-Level"
 author: "Vincent Nguyen"
 format:
   docx:
@@ -26,132 +26,122 @@ $\land$ Corresponding author: vln27447\@uga.edu
 
 *Write a summary of your project.*
 
-{{< pagebreak >}}
+{{< Examining the relationship between human mobility and infectious disease spread is essential for forecasting disease incidence and informing public health interventions. This analysis investigates community mobility patterns and their association with daily new COVID-19 case incidence in Georgia. Using county-level case counts and mobility trends from Google’s Community Mobility reports, machine learning models were constructed and evaluated; models included linear regression, Random Forest, and XGBoost. To assess the predictive power of mobility change metrics, two feature sets were utilized. The first set, referred to as “baseline”, included features known to affect disease incidence, such as lagged cases and population density. The second set included both the previous set’s features and metrics measuring changes in mobility (recorded as percent change from baseline). Models were trained and tuned using time-series blocked cross-validation and performance was evaluated R-squared, RMSE, and MAE metrics. Results indicated that models with mobility features could achieve modest improvements in RMSE and MAE, however, did not substantially increase R-squared, suggesting limited explanatory power. These findings suggest that while mobility data may slightly enhance short-term predictive accuracy, their overall predictive power in explaining COVID-19 incidence may be limited in this context. >}}
 
-# Introduction
+# 2 Introduction
+
+## 2.1 COVID-19 Pandemic
 
 The emergence of the novel corona-virus SARS-CoV-2 caused one of the most significant global health crises in modern history. First identified in Wuhan, China, in late 2019, the virus’s transmissibility and globalism led to its rapid spread worldwide, to leading the World Health Organization to declare it a pandemic on March 11, 2020. Just two days later, on March 13th, 2020, the Trump Administration declared a nationwide emergency due to the COVID-19 pandemic, marking the biggest virus outbreak since \_\_\_. In response, public health agencies implemented measures to curb the virus’ spread including travel restrictions, social distancing, and lockdown procedures (CDC 2024)[@centersfordiseasecontrolandprevention_2024_covid19].
 
-On March 2nd, 2020, Governor Brian Kemp announces the first two confirmed COVID-19 cases in the state, a Father and Son returning from Italy. At the same time as the rest of the nation, March 11th, Governor Kemp announced a state of emergency and closed all public schools on March 16th indefinitely. In the span of the next two weeks, Georgia saw its first and hundredth death to the virus. Weeks later, on April 2nd, Governor Kemp announced a shelter in place order for all Georgia residents. After only a month, on April 30th, the shelter-in-place order expired allowing Georgians to go to gyms, salons, barberships, and shortly after, restaurants.
+## 2.2 Mobility Dynamics
 
+Human mobility, a key driver[of respiratory disease transmi](https://www.nature.com/articles/s41598-024-64230-1)ssion, shifted significantly during the pandemic in response to public health policies and disease risk perception. Uniquely, the COVID-19 pandemic utilized a new form of physical distancing measures which was known as stay-at-home orders and colloquially, lockdowns. Lockdowns involved stringent stay-at-home orders, closure of non-essential businesses, and restrictions on public gatherings. Looking at the Wikipedia page shows a lack of prior history implementing lockdowns. Beyond these measures which lasted only a few weeks in Georgia, individual risk perception played into the compliance of other preventative behaviors (masking, social distancing, etc.). The[variability of individual risk perception](https://pmc.ncbi.nlm.nih.gov/articles/PMC9028425/#:~:text=The%20results%20indicate%20that%20a,%2C%20geographical%20factors%2C%20and%20timing.)has led to complex mobility patterns during the pandemic, for example, surges in mobility amidst large case outbreaks. In order to analyze and quantify this relationship, machine learning models were adapted.
 
 \[insert stats about pandemic\]
 
-### 2.2 Lockdown and Social Distancing
+## 2.3 Machine Learning
 
-Nonpharmacological interventions are among the measures public health officials utilize to help curb the transmission of infectious diseases. In lieu of medication or vaccinations, these interventions can be a cost-effective and population-based solution. These interventions include the use of isolation, the subdivision of an infected individual from the general population, and social distancing, a form of voluntary or mandated physical distancing from others. Another common measure is the use of quarantine, which is the restriction of infected or at-risk individuals from traveling to help minimize the risk of healthy individuals; it is intended that the period of transmissibility has passed before lifting the quarantine (Jacobsen and Jacobsen 2020)[@jacobsen_2020_statewide]. 
+[Machine Learning](https://pmc.ncbi.nlm.nih.gov/articles/PMC9949554/) refers to a class of data-driven algorithms that aim to analyze associations and relationships found in data. These techniques can be supervised or unsupervised; in supervised ML, models are given labeled inputs/features to derive and predict an output. These models aim to also approximate the relationship between outputs and inputs, quantify predictions, or approximate classification tasks. Beyond regular statistical analysis, machine learning methods offer powerful tools for forecasting infectious disease trends by identifying complex, nonlinear relationships between predictors and outcomes. S[ome common m](https://pmc.ncbi.nlm.nih.gov/articles/PMC8219638/)odels in disease forecasting include ARMA, ARIMA, LASSO, XGBoost, and various neural network techniques. Several autho[rs](https://pmc.ncbi.nlm.nih.gov/articles/PMC8731233/)have utilized case counts, estimations, demographics, and more to forecast disease trends. However, the predictive value of real-time mobility data, particularly in the context of an evolving pandemic, has not been assessed through modeling. This study aims to explore whether mobility dynamics, form Google’s Community Mobility Reports, can enhance predictive performance when modeling COVID-19 transmission at the county level.
 
-Uniquely, the COVID-19 pandemic utilized a new form of physical distancing measures which was known as stay-at-home orders and colloquially, lockdowns. Lockdowns involved stringent stay-at-home orders, closure of non-essential businesses, and restrictions on public gatherings. By April 3rd, 2020, just a few weeks after California’s state-wide mandate, 41 states joined the directive in restricting mobility (Mervosh et al. 2020)[@mervosh_2020_see]. Many polictians and citizens questioned the measure citing a lack of evidence for its efficacy; looking at the Wikipedia page shows a lack of prior history implementing lockdowns (Zeleny et al. 2021)[@zeleny_2021_a].
+# 3 Data
 
-### 2.3 Mobility Dynamics
+## 3.1 Google’s Community Mobility Report
 
-According to Paltra et al. 2021, mobility reductions on COVID-19 can be quadratic in reducing the transmission. For example, the authors state a reduction of out-of-home duration to 70% can result in a transmission rate of 0.49. \[finish\]
+During the pandemic, Google began to collect aggregated, anonymized data from users utilizing Google products (apps, phones, etc.) to track changes in mobility. Within the data, Google measures mobility as a percent change difference from baseline measurements; for example, a -45% change in retail and recreation mobility indicates a 45% reduction in movement to those categorical locations. These measurements are stratified by county, however, with the implication of technology use, are limited to counties with enough Google users. Additionally, two mobility metrics, transit stations and recreational parks, were omitted in this analysis due to incompleteness. 
 
-## Description of data and data source
+## 3.2 John Hopkins University COVID-19 Case Data
 
-This project explores mobility dynamics, as measured by [Google's Community Mobility Reports](https://www.google.com/covid19/mobility/), in an infectious disease context to understand and forecast disease spread. By integrating time-series infection data (provided by [Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)), the analysis aims to simulate disease outbreak scenarios and provide insights into optimal intervention strategies for mitigating future outbreaks. Additionally, the [County Health Ranking](https://www.countyhealthrankings.org/) is used to assess these dynamics within the context of a county's health care access and performance.\
-\
-Google's Community Mobility Reports are anonymized insights collected from Google products, such as maps, that detail population movement trends across various categories, such as retail stores, workplaces, residencies, and more.\
-\
-The COVID-19 Data Repository by the Center for Systems Science and Engineering at Johns Hopkins University is a comprehensive data set that tracks global COVID-19 cases, recoveries, and deaths. It was updated regularly and compiles data from various official sources to support research.\
+The COVID-19 Data Repository by the Center for Systems Science and Engineering at Johns Hopkins University is a comprehensive data set that tracks global COVID-19 cases, recoveries, and deaths. This data was recorded daily for several years across every county in the US.
 
-The County Health Ranking is a data set that provides a comprehensive overview of various health factors and outcomes across U.S. counties. Data collected includes metrics on healthcare access, insurance coverage, income levels, violent crime, air and water quality, transportation access, and more. \[Not sure about the inclusion of this\]
+## 3.3 Final Data-set
 
-## Questions/Hypotheses to be addressed
-
-How have mobility dynamics influenced the spread of COVID-19 in the U.S. during 2020-2022?\
-\
-Can mobility data, in combination with COVID-19 case counts, be used to forecast future infection trends?
-
-How do socio-economic and health factors influence the relationship between mobility patterns and COVID-19 infection rates across U.S. counties?
-
-Investigate if counties with similar health rankings but different mobility trends experienced different outbreak severities, potentially revealing the effectiveness of local interventions
-
-Examine ifthere was lag time between changes in mobility and subsequent changes in infection rates
-
-To cite other work (important everywhere, but likely happens first in introduction), make sure your references are in the bibtex file specified in the YAML header above and have the right bibtex key. Then you can include like this:
+After data wrangling and cleaning for completeness, 44 counties were included in the analysis. An 80% completeness of data per county was required for inclusion into analysis, resulting in the removal of 115 counties. Many of Georgia’s counties are rural and as such, lacked many mobility metrics. The data was filtered from March 14t 2020 to March 14 2022. This was selected specifically as March 14th marks the date of Governor Brian Kemp’s announcement of Georgia's Public Health State of Emergency.
 
 {{< pagebreak >}}
 
-# Methods
+# 4 Methods
 
-*Describe your methods. That should describe the data, the cleaning processes, and the analysis approaches. You might want to provide a shorter description here and all the details in the supplement.*
+## 4.1 Model Selection
 
-## Schematic of workflow
+As informed by Alfred and Obit 2021, machine learning models have wide application in forecasting outbreaks and disease incidence. In their review, they outline several common applications of regression and classification models. Their review, along with class content and data structure, informed model selection. Previous iterations of the analysis indicated that the data was non-normal and non-stationary which violated assumptions in common time series models like ARIMA. Linear regression was chosen as a standard model while Random Forest and XGBoost were chosen for their lack of assumptions required for analysis.
 
-Sometimes you might want to show a schematic diagram/figure that was not created with code (if you can do it with code, do it). @fig-schematic is an example of some - completely random/unrelated - schematic that was generated with Biorender. We store those figures in the `assets` folder.
+### Linear Regression
 
-## Data acquisition
+A statistical modeling method used to quantify the relationship between a continuous outcome variable and one or more predictors. In its simplest form, linear regression estimates, or fits, a linear equation explaining the relationship by minimizing the sum of squared differences between residuals. Linear regression assumes 
 
-*COVID-19 case data was provided by the Center of Systems and Science and Engineering at JHU and mobility data was provided by Google's Community Mobility Report.*
+### Random Forest
 
-## Data import and cleaning
+(https://www.stat.berkeley.edu/\~breiman/randomforest2001.pdf)\
 
-Since the pandemic spanned across 3 years, data on mobility was collected from 2020 to 2022. The data on mobility is quite extensive and is stratified by county, resulting in the large amount of mobility. The mobility data measures changes in mobility patterns across different key areas, such as retail, workplace, residential, and more.
+A ensemble machine learning method that builds multiple decision trees and aggregates their predictions to improve accuracy and reduce overfitting. A decision tree is a modeling technique that partitions  data into subsets based on the input features; it aims to minimize variance of the outcome variable in each subgroup. These splits form a tree-like structure whe -. Decision trees are powerful and can capture nonlinear complex relationships, however, can overfit training data.  Random forests are an average of these trees to produce a final prediction and can produce more stable/accurate models as a result.
 
-The time series data has 3342 observations of 1154 variables. Each row represents a different city. The columns record cases as days progress and locational data like longitude and latitude.
+### XGBoost
 
-```{r}
-library(here)
+(https://arxiv.org/abs/1603.02754): Also known as Extreme Gradient Boosting, XGBoost is a machine learning algorithm based on decision tress, however, instead of averaging trees, it tries to correct errors made by previous ones. This technique is known as boosting. In simple terms, XGBoost makes predictions with a single tree and looks at the errors and creates a second tree focused on minimizing the errors. 
 
-# importing data
-mobility_data_2020 <- read.csv(here("data", "raw-data", "2020_US_Region_Mobility_Report.csv"))
-mobility_data_2021 <- read.csv(here("data", "raw-data", "2021_US_Region_Mobility_Report.csv"))
-mobility_data_2022 <- read.csv(here("data", "raw-data", "2022_US_Region_Mobility_Report.csv"))
+Two sets of predictors were chosen to assess the effect mobility changes have on case incidence. The first set, the baseline predictors, included population density and 3 spaced out lagged variables for case counts (1 day, 7 days, and 14 days). These were chosen because of  their [known influence](https://pmc.ncbi.nlm.nih.gov/articles/PMC8983058/#:~:text=This%20study%20has%20shown%20that,data%20for%20COVID%E2%80%9019%20cases.) on disease transmission. The second set, the mobility predictors, included population density, the 3 spaced out lagged variables, and mobility indicators from Google’s report (e.g., workplace, grocery, retail, transit).
 
-time_series_covid <- read.csv(here("data", "raw-data", "time_series_covid19_confirmed_US.csv"))
+## 4.2 Cross Validation
 
-chr_data_2024 <- read.csv(here("data", "raw-data", "chr_trends_csv_2024.csv"))
+To evaluate model performance while accounting for the temporal structure of the data, a time-blocked cross-validation strategy was employed. The dataset was partitioned into eight non-overlapping temporal folds, each representing a three-month interval spanning March 2020 to March 2022. Each observation (a day for a corresponding county) was assigned a fold based on its calendar month. Grouped k-fold cross-validation using these time-based identifiers were used to ensure data from the future could not leak into the training set.
 
+## 4.3 Model Evaluation and Metrics
 
+### R-squared
 
+A statistical measure that explains the proportion of the data variation that can be explained by the model. A higher R-squared value generally is indicative of a better-fitting model, although could be misleading when over fitting occurs.
 
+### RMSE
 
-```
+Root Mean Square Deviation is a statistical measure that averages the magnitude of the errors in the model’s predictions.
 
-## Statistical analysis
+Arithmetically, it is the square root of the average squared differences between the predicted and actual values. A lower RMSE indicates a better predictive performance.
+
+### MAE
+
+Mean Absolute Error is a statistical measure that also measures prediction error, however, utilizes the absolute difference between predicted and actual values instead of the squaring the errors. It is calculated by taking the average absolute difference between each predicted and actual value. Because of its computation, MAE is less sensitive to large errors, like outliers, than RMSE. MAE may be a more reliable metric for this data set due to the presence of large outbreaks that can inflate the errors.
+
+Linear regression, Random Forest, and XGBoost models were trained using the baseline set of features to predict COVID-19 case incidence. These baseline models served as reference points to evaluate the added predictive value of mobility-based features and to assess the potential association between changes in population mobility and COVID-19 case incidence. 
+
+After the initial RF and XGBoost models were made, their hyperparameters were tuned to improve predictive performance.
+
+## 4.4 Software
+
+The analysis was conducted on RStudio 4.3.2 on Windows 11. The following R packages were used: [ggplot2](https://cran.r-project.org/web/packages/ggplot2/index.html), [broom](https://cran.r-project.org/web/packages/broom/index.html), [here](https://cran.r-project.org/web/packages/here/index.html), [glmnet](https://cran.r-project.org/web/packages/glmnet/index.html), [MASS](https://cran.r-project.org/web/packages/MASS/index.html), [tidymodels](https://cran.r-project.org/web/packages/tidymodels/index.html), [dplyr](https://cran.r-project.org/web/packages/dplyr/index.html), [rsample](https://cran.r-project.org/web/packages/rsample/index.html), [parsnip](https://cran.r-project.org/web/packages/parsnip/index.html), [future](https://cran.r-project.org/web/packages/future/index.html), [vip](https://cran.r-project.org/web/packages/vip/index.html), [zoo](https://cran.r-project.org/web/packages/zoo/index.html), [patchwork](https://cran.r-project.org/web/packages/patchwork/index.html), [e1071](https://cran.r-project.org/web/packages/e1071/index.html), [scales](https://cran.r-project.org/web/packages/scales/index.html), [RColorBrewer](https://cran.r-project.org/web/packages/RColorBrewer/index.html), [corrplot](https://cran.r-project.org/web/packages/corrplot/index.html), [reshape2](https://cran.r-project.org/web/packages/reshape2/index.html), [tidyr](https://cran.r-project.org/web/packages/tidyr/index.html), [lubridate](https://cran.r-project.org/web/packages/lubridate/index.html), [readxl](https://cran.r-project.org/web/packages/readxl/index.html), [stringr](https://cran.r-project.org/web/packages/stringr/index.html), [skimr](https://cran.r-project.org/web/packages/skimr/index.html), [tigris](https://cran.r-project.org/web/packages/tigris/index.html), and [sf](https://cran.r-project.org/web/packages/sf/index.html).
 
 {{< pagebreak >}}
 
-# Results
+# 5 Results
 
-## Exploratory/Descriptive analysis
-
-To gain a clearer perspective on the overall scale of the pandemic, we visualized the total number of COVID-19 cases over time. This plot provides a overview of how case counts evolved.The graph reveals a large spike in cases in the beginning of 2022. This does correspond with figures further.
+## 5.1 Exploratory/Descriptive analysis
 
 ```{r}
-#| label: casecountplot
-#| fig-cap: "Total COVID-19 Cases overtime"
+#| label: cases_graph
+#| fig-cap: "Total COVID-19 Cases in Georgia over time"
 #| echo: FALSE
-knitr::include_graphics(here("results","figures","casecountplot.png"))
+knitr::include_graphics(here("results","figures","cases_graph.png"))
 ```
-
-To gain a clearer perspective on the overall scale of the pandemic, we visualized new caes of COVID-19 over time. This plot provides a overview of how case counts and infection evolved.The graph reveals a large spike in cases in the beginning of 2022 which corresponds with the total case count graph.
 
 ```{r}
 #| label: incidenceplot
-#| fig-cap: "Daily New COVID-19 Cases overtime in the U.S."
+#| fig-cap: "Daily New COVID-19 Cases overtime in the GA (2020-2022)"
 #| echo: FALSE
-knitr::include_graphics(here("results","figures","incidenceplot.png"))
+knitr::include_graphics(here("results","figures","incidence_graph.png"))
 ```
-
-To gain a deeper understanding of how mobiltiy patterns shifted throughout the pandemic, weekly changes in mobility were visualized. This plot highlights fluctuations in movement across various sectors. Mobility was increased towards residential and recreational areas which warrants further exploration. This can help offer insight into how behavior towards COVID-19 restriction interventions evolved over time.
 
 ```{r}
 #| label: mobiltiygraph
-#| fig-cap: "Percent Changes in Mobility per week in the U.S."
+#| fig-cap: "Percent Changes in Mobility per week in GA"
 #| echo: FALSE
 knitr::include_graphics(here("results","figures","mobilitygraph.png"))
 ```
 
-As hypothesized, an rise in COVID-19 case count is expected to lead to a decline in mobility to non-residential locations, as individuals alter their behavior in resposne to increasing risks. To explore this idea, total case count and changes in mobility were visualzied across the United States.\
-\
-
 ```{r}
-#| label: casemap
-#| fig-cap: "Total COVID-19 Cases on 10/15/2022 mapped to the U.S."
+#| label: mobilitygrid
+#| fig-cap: "Percent Changes in Mobility per week in GA"
 #| echo: FALSE
-knitr::include_graphics(here("results","figures","casemap.png"))
+knitr::include_graphics(here("results","figures","mobility_grid.png"))
 ```
 
 ```{r}
@@ -161,11 +151,15 @@ knitr::include_graphics(here("results","figures","casemap.png"))
 knitr::include_graphics(here("results","figures","mobilitymap.png"))
 ```
 
-Analysis of the mapped data reveals a trend: states with higher case counts generally experienced more significant decreases in mobility. This suggests a correlation between rising COVID-19 case count and a greater reduction in movement to non-residential locations.
+## Correlation Analysis
 
-## Basic statistical analysis
-
-*To get some further insight into your data, if reasonable you could compute simple statistics (e.g. simple models with 1 predictor) to look for associations between your outcome(s) and each individual predictor variable. Though note that unless you pre-specified the outcome and main exposure, any "p\<0.05 means statistical significance" interpretation is not valid.*
+```{r}
+#| label: correlation
+#| fig-cap: "Correlation Matrix of Predictors using Spearman's"
+#| echo: FALSE
+knitr::include_graphics(here("results","figures","matrix.png"))
+```
+ In addition to visual analysis, correlation analysis was done. The non-parametric method, Spearman’s rank correlation coefficient, was used to assess correlation among predictors. Analysis reveals that lagged case counts were strongly correlated with daily incidence while in contrast mobility variables demonstrated weak relationships. This is suggestive of lagged variables's strong predictive power and mobility metric’s weak power.
 
 ## Full analysis
 

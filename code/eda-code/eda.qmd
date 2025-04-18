@@ -4,19 +4,21 @@ date: "2025-02-21"
 output: html_document
 ---
 
-This Quarto file loads the cleaned data and does some exploring.
-# Setup
+This Quarto file loads the cleaned data and does some exploring. \# Setup
 
 ```{r}
 #load needed packages. make sure they are installed
 library(here) 
 library(dplyr)
-library(skimr)
 library(ggplot2)
 library(zoo)
-library(tidyr)
-library(tigris)
-library(sf)
+library(patchwork)
+library(e1071)
+library(scales)
+library(RColorBrewer)
+library(corrplot)
+library(reshape2)
+
 ```
 
 Load the data from processingfile-v1 file.
@@ -24,144 +26,77 @@ Load the data from processingfile-v1 file.
 ```{r}
 
 # processed data
-processeddata <- readRDS(here("data", "processed-data", "processeddata.rds"))
+data <- readRDS(here("data", "processed-data", "processeddata.rds"))
 
-processeddata <- processeddata %>%
+case_data <- readRDS(here("data", "processed-data", "processedcasedata.rds"))
+
+data<- data %>%
    mutate(incidence_rate = if_else(incidence_rate < 0, 0, incidence_rate))
 ```
 
-Creation of a heatmap showing total COVID 19 cases on the last observed date, 10/15/2022. I also created a heat map showing mobility changes, with hotter indicating more mobility to retail and recreational spots. Interestingly, the two maps seem to correlate even though I used total COVID-19 cases rather than new ones.
+DataVisualization
 
+Since new case incidence is the variable of interest, it was visually inspected to understand the distribution.
+
+From the graphs, kurtosis test, and skewness test, it is apparent that daily new case incidence is not normally distribued and heavily skewed towards 0 and other lower values. The second graph, new cases over 500, was graphed to show how certain days do reach high case incidence.
 ```{r}
-# load GA shapefile
-ga_counties <- counties(state = "GA", cb = TRUE, class = "sf")
 
-ga_counties <- ga_counties %>%
-  mutate(NAME = tolower(NAME))
+density_cases <- data %>%
+  ggplot( aes(x=new_cases)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.8) +
+  labs(title = "Distribution of Daily New Case Incidence", 
+       x = "Daily New Cases",
+       y = "Density") +
+  theme_bw()
 
-ga_map_data <- ga_counties %>%
-  left_join(processeddata, by = c("NAME" = "county"))
+print(density_cases)
 
-ga_health <- processeddata %>%
+figure_file = here("results","figures","density_cases.png")
+ggsave(filename = figure_file, plot=density_cases)
+
+density_cases_500 <- data %>%
+  filter(new_cases > 500) %>%
+  ggplot( aes(x=new_cases)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.8) +
+  labs(title = "Distribution of Daily New Case Incidence (Over 500)", 
+       x = "Daily New Cases",
+       y = "Density") +
+  theme_bw()
+
+print(density_cases_500)
+
+figure_file = here("results","figures","density_cases_500.png")
+ggsave(filename = figure_file, plot=density_cases_500)
+
+print(kurtosis(data$new_cases))
+print(skewness(data$new_cases))
+```
+A histogram of population density was created. I hypothesize that population density plays a large role in case incidence. Population density is also skewed, however, there are some notable counties that do have large populationd densities.
+```{r}
+data_summary <- data %>%
   group_by(county) %>%
-  summarize(
-    health_outcome = mean(health_outcome_rank, na.rm = TRUE), 
-    population = first(population_count)  
-  ) %>%
-  ungroup()
+  summarize(pop_density = mean(pop_density, na.rm = TRUE))
 
-ga_health_map_data <- ga_counties %>%
-  left_join(ga_health, by = c("NAME" = "county"))
+histo_pop_density <- ggplot(data_summary, aes(x = pop_density)) + 
+  geom_histogram(bins = 30, fill = "#69b3a2", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Population Density (2-Year Average per County)", 
+       x = "Population Density (Calculated as Population Count / km squared)", y = "Frequency") + theme_bw()
 
-ranking_map <- ggplot(ga_health_map_data) +
-  geom_sf(aes(fill = health_outcome), color = "black") +  
-  scale_fill_viridis_c(option = "inferno", na.value = "grey") +  
-  theme_minimal() + 
-  labs(title = 
-         "Map of Georgia Counties Colored by Average Health Outcome Rankings (2020-2022) ",
-       fill = "Health Outcome Rank (Lower is better)") +
-  theme(legend.position = "right")
+print(histo_pop_density)
 
-print(ranking_map)
+figure_file = here("results","figures","histo_pop_density.png")
+ggsave(filename = figure_file, plot=histo_pop_density)
 ```
+
+
+A 7-day rolling average was applied to the mobility data as the original iteration was too jagged. This code entails the creation of a data frame for 7 day averages.
 
 ```{r}
 
-top_10_counties <- processeddata %>%
-  group_by(county) %>%
-  filter(year == 2022) %>%
-  summarise(cases = max(new_cases, na.rm = TRUE)) %>%
-  arrange(desc(new_cases)) %>%
-  slice_head(n = 10) %>%
-  pull(county)
-
-# Filter the original data to only include the top 10 counties
-filtered_data <- processeddata %>%
-  filter(county %in% top_10_counties)
-
-ggplot(processeddata, aes(x = week(date), y = county, fill = incidence_rate)) +
-  geom_tile(color = "white") +  # Grid-like separation
-  scale_fill_viridis_c(option = "plasma", na.value = "grey", 
-                       breaks = c(1, 3, 5, 10), 
-                       labels = c("<1", "<3", "<5", "≥10")) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank()) +
-  labs(title = "Average Weekly Incidence per 100,000",
-       x = "Year", y = "State", fill = "Incidence Rate")
-```
-
-This graph charts prevalence of COVID-19 in 2022 against a County's Health Outcome Rank. One severe outlier was removed for the graph's clarity. Regardless, from this scatter plot, it seems a county's health outcome ranking is not indicative of their prevention of COVID-19 cases. This could be the result of population density in counties of greater ranking. After graphing population count against a 
-
-```{r}
-health_ranking_cases <- processeddata %>%
-  filter(lubridate::year(date) == 2021) %>%
-  group_by(county) %>%
-  summarize(
-    total_cases_2022 = sum(new_cases, na.rm = TRUE),
-    health_factor_rank = first(health_factor_rank),
-    density = first(pop_density),
-    population_count = first(population_count)
-  ) %>%
-  ungroup() %>%
-  mutate(prevalence = total_cases_2022 / population_count)
-
-health_incidence_scatter <- ggplot(health_ranking_cases, aes(x = health_factor_rank, y = prevalence )) +
-  geom_point(alpha = 0.5, color = "blue") + theme_minimal() +
-  scale_x_reverse() +
-  coord_cartesian(ylim = c(0, 0.2)) +
-  labs(title = "Prevalence of COVID-19 in 2022 vs Health Factor Rank", x = "Health Factor Rank",
-       y= "Prevalence Rate")
-
-print(health_incidence_scatter)
-
-
-# Include larger values
-ranking_population_scatter_1 <- ggplot(health_ranking_cases, aes(x = health_factor_rank, y = density)) +
-  geom_point(alpha = 0.5, color = "red") + theme_minimal()+
-  scale_x_reverse() +
-  scale_y_continuous(labels = comma) +
-  labs(title = "Health Factor Rank vs Population Density (per km2) in 2022", x = "Health Factor Rank", 
-       y = "Density")
-
-print(ranking_population_scatter_1)
-
-
-prevalence_density_scatter <- ggplot(health_ranking_cases, aes(x = density, y = prevalence)) +
-  geom_point(alpha = 0.5, color = "red") + theme_minimal()+
-  scale_y_continuous(labels = comma) +
-  labs(title = "Population Density (per km2) vs COVID-19 Prevalence in 2022", 
-       x = "Density (Persons per km2)", 
-       y = "Prevalence")
-
-print(prevalence_density_scatter)
-```
-
-```{r}
-ga_case_count <- processeddata %>%
-  group_by(date) %>%
-  summarise(ga_total_cases = sum(new_cases, na.rm = TRUE))
-
-ga_cases_graph <- ggplot(ga_case_count, aes(x = date)) +
-  geom_line(aes(y = ga_total_cases), color = "blue") +
-  labs(title = "Case Count per Day in Georgia",
-       x= "Date",
-       y = "Case Count") + theme_minimal()
-
-print(ga_cases_graph)
-
-```
-I aim to plot out the changes in mobility for each category as time progresses. Originally, it plotted out everyday, however, the line was far too jagged so I applied a weekly rolling average instead. I also had to create a dataframe to average values for a given day for every location.
-```{r}
-
-# Create dataframe of average mobility for everywhere in the US per date
-ga_average_mobility <- processeddata %>%
+# Create dataframe of average mobility per county per date
+ga_average_mobility <- data %>%
   group_by(date) %>%
   summarise(
-    total_mobility_changes = mean(average_mobility, na.rm = TRUE),
-    transit_mean = mean(transit_stations_percent_change_from_baseline, na.rm = TRUE),
-    parks_mean = mean(parks_percent_change_from_baseline, na.rm = TRUE),
     retail_mean = mean(retail_and_recreation_percent_change_from_baseline, na.rm = TRUE),
     grocery_mean = mean(grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
     workplaces_mean = mean(workplaces_percent_change_from_baseline, na.rm = TRUE),
@@ -170,8 +105,6 @@ ga_average_mobility <- processeddata %>%
   ungroup() %>%
   arrange(date) %>%  # Ensure dates are sorted
   mutate(
-    transit_mean_7day = rollmean(transit_mean, k = 7, fill = NA, align = "right"),
-    parks_mean_7day = rollmean(parks_mean, k = 7, fill = NA, align = "right"),
     retail_mean_7day = rollmean(retail_mean, k = 7, fill = NA, align = "right"),
     grocery_mean_7day = rollmean(grocery_mean, k = 7, fill = NA, align = "right"),
     workplaces_mean_7day = rollmean(workplaces_mean, k = 7, fill = NA, align = "right"),
@@ -181,17 +114,16 @@ ga_average_mobility <- processeddata %>%
 # Plot the 7-day averages for each mobility type
 mobility_graph <- ggplot(ga_average_mobility, aes(x = date)) +
   geom_line(aes(y = grocery_mean_7day, color = "Grocery & Pharmacy")) +
-  geom_line(aes(y = transit_mean_7day, color = "Transit Stations")) +
   geom_line(aes(y = workplaces_mean_7day, color = "Workplaces")) +
   geom_line(aes(y = residential_mean_7day, color = "Residential")) +
-  geom_line(aes(y = parks_mean_7day, color = "Recreational")) +
+  geom_line(aes(y = retail_mean_7day, color = "Retail")) +
   labs(
     title = "7-Day Moving Average of Percent Change in Mobility in Georgia Over Time",
     x = "Date",
     y = "7-Day Average of Percent Change in Mobility",
     color = "Mobility Type"
   ) +
-  theme_minimal()
+  theme_bw()
 
 print(mobility_graph)
 
@@ -199,3 +131,176 @@ print(mobility_graph)
 figure_file = here("results","figures","mobilitygraph.png")
 ggsave(filename = figure_file, plot=mobility_graph)
 ```
+
+For better legiiblity, all 4 mobiltiy types were graphed separately.
+
+```{r}
+# Create one plot per mobility type
+p1 <- ggplot(ga_average_mobility, aes(x = date, y = grocery_mean_7day)) +
+  geom_line(color = "steelblue") +
+  labs(title = "Grocery & Pharmacy", x = "Date", y = "7-Day Avg % Change") +
+  theme_bw() +
+  coord_cartesian(ylim = c(-50, 20)) 
+
+p2 <- ggplot(ga_average_mobility, aes(x = date, y = workplaces_mean_7day)) +
+  geom_line(color = "darkred") +
+  labs(title = "Workplaces", x = "Date", y = "7-Day Avg % Change") +
+  theme_bw() +
+  coord_cartesian(ylim = c(-50, 20)) 
+
+p3 <- ggplot(ga_average_mobility, aes(x = date, y = residential_mean_7day)) +
+  geom_line(color = "forestgreen") +
+  labs(title = "Residential", x = "Date", y = "7-Day Avg % Change") +
+  theme_bw() +
+  coord_cartesian(ylim = c(-50, 20)) 
+
+p4 <- ggplot(ga_average_mobility, aes(x = date, y = retail_mean_7day)) +
+  geom_line(color = "purple") +
+  labs(title = "Retail", x = "Date", y = "7-Day Avg % Change") +
+  theme_bw() +
+  coord_cartesian(ylim = c(-50, 20)) 
+
+# Arrange in a 2x2 grid
+mobility_grid <- (p1 | p2) / (p3 | p4)
+
+# Show it
+print(mobility_grid)
+
+# Save it
+figure_file = here("results", "figures", "mobility_grid.png")
+ggsave(filename = figure_file, plot = mobility_grid)
+
+
+```
+
+After visually inspecting the new cases over time graph, heteroscedastity and non-stationairty are of concern. Large outbreaks can skew these metrics and even when tested, could be misleading. Additionally, assumptions of homoscedastity are required for some tests of stationairty and some assumptions of normality are required for some tests of homoscdastity. Because of these concerns, I chose to focus on models like XGBoost and Random Forest which do not require these assumptions.
+
+```{r}
+library(scales)
+
+first_date <- min(data$date)
+last_date <- max(data$date)
+
+cases_graph <- case_data %>%
+  group_by(date) %>%
+  summarise(total_cases = sum(total_cases, na.rm = TRUE)) %>%
+  arrange(date) %>%
+  ggplot(aes(x = date, y = total_cases)) +
+    geom_area(fill = "#69b3a2", alpha = 0.5) +
+    geom_line(color = "#69b3a2") +
+    ylab("Total Cases (in GA)") +
+    scale_y_continuous(labels = label_number()) +
+   scale_x_date(
+      breaks = seq(from = first_date, to = last_date, by = "6 months"),  # Breaks every 3 months
+      labels = date_format("%b %Y")  # Format labels as month year (e.g., Jan 2020)
+    ) +
+    theme_bw() +
+  labs(title = "Total Cases (in GA) Over Time",
+       x = "Date (2020 - 2022)",
+       y = "Total Cases")
+
+print(cases_graph)
+
+figure_file = here("results","figures","cases_graph.png")
+ggsave(filename = figure_file, plot=cases_graph)
+
+incidence_graph <- data %>%
+  group_by(date) %>%
+  summarise(new_cases = sum(new_cases, na.rm = TRUE)) %>%
+  arrange(date) %>%
+  ggplot(aes(x = date, y = new_cases)) +
+    geom_area(fill = "#69b3a2", alpha = 0.5) +
+    geom_line(color = "#69b3a2") +
+    ylab("Daily New Cases") +
+     scale_x_date(
+      date_breaks = "3 months",  # Automatically set the breaks to every 3 months
+      date_labels = "%b %Y"      # Format labels as month-year (e.g., Jan 2020)
+    ) +
+    theme_bw() +
+  labs(title = "Daily New Cases (in GA) Over Time",
+       x = "Date (2020 - 2022)",
+       y = "Total Cases")
+
+print(incidence_graph)
+
+figure_file = here("results","figures","incidence_graph.png")
+ggsave(filename = figure_file, plot=incidence_graph)
+```
+
+This code chunk plots a scatter plot of a county's population count against its final total cases. 
+```{r}
+
+year_end_cases <- data %>%
+  mutate(year = year(date)) %>%
+  group_by(county, year) %>%
+  slice_max(order_by = date, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(county, year, total_cases)
+
+pop_density_info <- data %>%
+  mutate(year = year(date)) %>%
+  select(county, year, pop_density) %>%
+  distinct()
+
+plot_df <- left_join(year_end_cases, pop_density_info, by = c("county", "year"))
+
+year_end_cases_graph <- ggplot(plot_df, aes(x = pop_density, y = total_cases)) +
+  geom_point(color = "#69b3a2", alpha = 0.6) +
+  facet_wrap(~year) +
+  labs(
+    x = "Population Density",
+    y = "Total COVID Cases (End of Year)",
+    title = "Year-End COVID Cases vs. Population Density by County"
+  ) +
+  theme_bw()
+
+print(year_end_cases_graph)
+
+figure_file = here("results","figures","year_end_cases_graph.png")
+ggsave(filename = figure_file, plot=year_end_cases_graph)
+```
+Correlation Analysis
+
+This code chunk entails correlation testing through Spearman's and the creation of a matrix. First, lagged variables for case count was created for the data.
+```{r}
+
+data <- data %>%
+  group_by(county) %>%
+  arrange(date) %>%
+  mutate(
+    lag_1 = lag(new_cases, 1),
+    lag_7 = lag(new_cases, 7),
+    lag_14 = lag(new_cases, 14)
+  ) %>%
+  ungroup()
+
+data <- data %>% drop_na()
+
+
+# Create a data frame for matrix creation
+cor_df <- data %>%
+  select("New Cases" = new_cases, "1 Day Lag" = lag_1, "7 Day Lag" = lag_7, "14 Day Lag" = lag_14, "Population Density" = pop_density, "Retail Mobility" = retail_and_recreation_percent_change_from_baseline, "Workplace Mobility" = workplaces_percent_change_from_baseline, "Residential Mobility" = residential_percent_change_from_baseline, "Grocery Mobility" = grocery_and_pharmacy_percent_change_from_baseline,)
+
+# Calculate correlations using Spearman's rank correlation because data is non parametric
+cor_matrix <- cor(cor_df, method = "spearman")
+
+# Melt for visualization
+cor_matrix_melted <- melt(cor_matrix)
+
+# Create plot for matrix
+matrix <- ggplot(cor_matrix_melted, aes(x = Var1, y = Var2)) +
+  geom_point(aes(size = abs(value), color = value)) +
+  geom_text(aes(label = round(value, 2)), color = "black", size = 3) +
+  scale_color_gradient2(low = "#BFA2DB", high = "#92C7CF", mid = "white",
+                        midpoint = 0, limit = c(-1, 1), name = "Correlation") +
+  scale_size(range = c(2, 10), guide = "none") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Correlation Heatmap (Spearman's)", x = "Variables", y = "Variables")
+
+print(matrix)
+
+figure_file = here("results","figures","matrix.png")
+ggsave(filename = figure_file, plot=matrix)
+```
+

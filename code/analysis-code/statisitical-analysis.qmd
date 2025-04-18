@@ -9,6 +9,11 @@ output: html_document
 
 Load needed packages. make sure they are installed.
 
+Note to self:
+Tried lagging mobility (doesnt improve models)
+Tried filtering data to pre-vaccination (doesnt improve models)
+
+
 ```{r}
 library(ggplot2) 
 library(broom) 
@@ -18,9 +23,10 @@ library(MASS)
 library(tidymodels)
 library(dplyr)
 library(rsample)
-library(poissonreg)
+library(tibble)
 library(parsnip)
 library(future)
+library(vip)
 ```
 
 ```{r}
@@ -31,29 +37,177 @@ data_location <- here::here("data","processed-data","processeddata.rds")
 #load data. 
 data <- readRDS(data_location)
 
-# NOTES TO SELF
-# - change to QMD file (personally prefer)
-# - work on other analysis (lag-time & quarantine fatigue? more research)
-# - work on inclusion of county health ranking data or possibly not include at all? lots of mismatch counties between datasets
-class(data$new_cases)
+```
+
+```{r}
+# Creation of lagged cases; commonly used in epi modeling
+# Note: lagged mobility does not significantly improve results from what I can tell
+data <- data %>%
+  group_by(county) %>%
+  arrange(date) %>%
+  mutate(
+    lag_1 = lag(new_cases, 1),
+    lag_7 = lag(new_cases, 7),
+    lag_14 = lag(new_cases, 14),
+  ) %>%
+  ungroup()
+
+data <- data %>% drop_na()
+```
+
+Ok, With help from ChatGPT, I implemented time blocked CV folds. The idea is that the data needs to respect the time-series nature and rolling window cannot be implemented because of the missing days in some counties.  
+
+This code splits the data into 8 folds. For each fold, the model trains on all the data up to and incuding the last fold before the test set. For example, the model will train on fold 1 and test on fold 2. Then, the model will train on folds 1 + 2 and test on fold 3.
+```{r}
+# Set seed
+seed <- 1234
+set.seed(seed)
+
+library(dplyr)
+library(lubridate)
+library(rsample)
+
+# Step 1: Ensure the data is ordered by date
+train_data <- data %>%
+  arrange(date)
+
+# Step 2: Create a new variable that indicates the month or quarter
+train_data <- train_data %>%
+  mutate(month = floor_date(date, "month")) 
+
+# Step 3: Define the fold boundaries manually based on your specific date range
+train_data <- train_data %>%
+  mutate(fold_id = case_when(
+    month >= as.Date("2020-03-01") & month <= as.Date("2020-06-13") ~ 1,
+    month >= as.Date("2020-06-14") & month <= as.Date("2020-09-13") ~ 2,
+    month >= as.Date("2020-09-14") & month <= as.Date("2020-12-13") ~ 3,
+    month >= as.Date("2020-12-14") & month <= as.Date("2021-03-14") ~ 4,
+    month >= as.Date("2021-03-15") & month <= as.Date("2021-06-14") ~ 5,
+    month >= as.Date("2021-06-15") & month <= as.Date("2021-09-14") ~ 6,
+    month >= as.Date("2021-09-15") & month <= as.Date("2021-12-14") ~ 7,
+    month >= as.Date("2021-12-15") & month <= as.Date("2022-03-14") ~ 8
+  ))
+
+# Step 4: Check the number of observations per fold and the date ranges
+folds_summary <- train_data %>%
+  group_by(fold_id) %>%
+  summarise(
+    min_date = min(date),
+    max_date = max(date),
+    n_obs = n()
+  ) %>%
+  print()
+
+# Step 5: Create the blocked CV folds using the fold_id
+folds <- group_vfold_cv(train_data, group = "fold_id")
+
+# Set aside last fold for testing
+test_data <- train_data %>% filter(fold_id == 8)
+train_data_final <- train_data %>% filter(fold_id < 8)
+
+```
+
+```{r}
+library(rsample)
+library(dplyr)
+library(lubridate)
+library(rsample)
+
+# Step 0: Make sure your data is sorted
+data <- data %>%
+  arrange(date, county)
+
+# Step 1: Define test set as final 30 days
+test_days <- 30
+last_date <- max(data$date)
+test_start_date <- last_date - days(test_days - 1)
+
+train_data <- data %>% filter(date < test_start_date)
+test_data  <- data %>% filter(date >= test_start_date)
+
+
+rolling_folds <- rolling_origin(
+  data = train_data,
+  initial = 120 * 44,  # ~4 months of training
+  assess  = 30 * 44,   # ~1 month of validation
+  skip    = 15 * 44,   # roll forward 1 month
+  cumulative = FALSE
+)
+
+# Check date ranges for each fold
+train_ranges <- purrr::map(rolling_folds$splits, ~range(pull(training(.x), date)))
+
+# Print the ranges for each fold
+train_ranges
+
+# Step 3: (Optional) View fold summary
+fold_sizes <- purrr::map_dfr(rolling_folds$splits, function(split) {
+  tibble(
+    train_n = nrow(training(split)),
+    test_n  = nrow(testing(split))
+  )
+})
+
+print(fold_sizes)
+
+# Check date ranges too (optional)
+range(train_data$date)
+range(test_data$date)
+
 ```
 
 ```{r}
 # Intial Recipe setting
-recipe <- recipe(new_cases ~ pop_density + transit_stations_percent_change_from_baseline + 
-                     parks_percent_change_from_baseline + 
-                     retail_and_recreation_percent_change_from_baseline + 
-                     grocery_and_pharmacy_percent_change_from_baseline +
-                     workplaces_percent_change_from_baseline + 
-                     residential_percent_change_from_baseline +
-                     health_factor_rank, data = data)
-  
+recipe <- recipe(new_cases ~ pop_density +
+                  retail_and_recreation_percent_change_from_baseline +
+                   grocery_and_pharmacy_percent_change_from_baseline + 
+                   workplaces_percent_change_from_baseline +
+                   residential_percent_change_from_baseline +
+                     lag_1 + lag_7 + lag_14, data = data)
 
-
-
+recipe_baseline <- recipe(new_cases ~ pop_density + lag_1 + lag_7 + lag_14, data = data)
 ```
 
-First, I created a linear regression model as the baseline standard. This model performs very poorly as it has a low R-squared, indicating low predictive power. The model does mark all variables of the model to be significant.Additionally, the AIC is very extremely high.
+
+
+```{r}
+# Define your model specification (linear regression)
+base_lm_spec <- linear_reg() %>%
+  set_engine("lm")
+
+# Create the workflow with the baseline recipe
+base_lm_wf <- workflow() %>%
+  add_recipe(recipe_baseline) %>%
+  add_model(base_lm_spec)
+
+# Resampling with cross-validation
+base_lm_res <- fit_resamples(
+  base_lm_wf,
+  resamples = rolling_folds,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_resamples(save_pred = TRUE)
+)
+
+# Collect and print metrics from resampling
+base_lm_metrics <- collect_metrics(base_lm_res)
+print(base_lm_metrics)
+
+# Collect and evaluate predictions
+base_lm_res %>%
+  collect_predictions() %>%
+  group_by(id) %>%
+  metrics(truth = new_cases, estimate = .pred)
+
+# Store metrics
+print(base_lm_metrics)
+
+# Fitting the final model on the training data
+base_lm_fit <- base_lm_wf %>%
+  fit(data = train_data)
+
+# Plot variable importance
+vip(base_lm_fit$fit$fit)
+```
 
 ```{r}
 # Create linear regression model
@@ -61,150 +215,720 @@ lm_spec <- linear_reg() %>%
   set_engine("lm")
 
 lm_wf <- workflow() %>%
-  add_recipe(recipe)
+  add_recipe(recipe) %>%
+  add_model(lm_spec)
 
+# Resampling with CV
+lm_res <- fit_resamples(
+  lm_wf,
+  resamples = rolling_folds,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_resamples(save_pred = TRUE)
+)
+
+# Collect and print metrics from resampling
+collect_metrics(lm_res)
+
+lm_res %>% 
+  collect_predictions() %>%
+  group_by(id) %>%
+  metrics(truth = new_cases, estimate = .pred)
+
+# Store metrics
+lm_metrics <- collect_metrics(lm_res)
+print(lm_metrics)
+
+# Fitting final model
 lm_fit <- lm_wf %>%
-  add_model(lm_spec) %>%
-  fit(data = data)
+  fit(data = train_data)
 
-lm_fit %>%
-  extract_fit_parsnip() %>%
-  tidy()
+# Plot variable importance
+vip(lm_fit$fit$fit)
 
-lm_fit %>%
-  extract_fit_parsnip() %>%
-  broom::glance()
-
-lm_preds<- predict(lm_fit, new_data = data)
-
-lm_metrics <- tibble(truth = data$new_cases, predicted = lm_preds$.pred) %>%
-  metrics(truth = truth, estimate = predicted)
-lm_metrics
 ```
 
-I utilized Lasso here to hopefully bring down the RMSE and bring up the rsquared. It seems Lasso has no effect on model performance as the data lacks multicolinearity and does not have irrelevant predictors. 
+After the linear regression model performed poorly, the use of random forest seemed rational as this model can capture more complex relationships and handle the quirks of the data. With an r-squared of 0.7824, this model does capture more variance than the linear regression model. Additionally, the MAE has improvements as well. The use of RMSE may be difficult due to the presence of outliers, or in other words, days where huge outbreaks occured.
 ```{r}
-# Set method for LASSO
-lasso_spec <- linear_reg(penalty = 0.1, mixture = 1) %>%
-  set_engine("glmnet")
+rngseed = 1234
 
-# Insert recipe
-lasso_wf <- workflow() %>%
-  add_recipe(recipe)
+# base_1: Forest specification (Random Forest)
+base_forest_spec <- rand_forest(mode = "regression") %>%
+  set_engine("ranger", seed = rngseed, importance = "impurity")
 
-lasso_fit <- lasso_wf %>%
-  add_model(lasso_spec) %>%
-  fit(data = data)
+# base_2: Insert baseline recipe into workflow
+base_forest_wf <- workflow() %>%
+  add_recipe(recipe_baseline)
 
-lasso_fit %>%
-  extract_fit_parsnip() %>%
-  tidy()
+# base_3: Time-blocked CV (folds already created earlier)
+# base_folds <- group_vfold_cv(train_data, group = fold_id)
 
-lasso_fit %>%
-  extract_fit_parsnip() %>%
-  broom::glance()
+# base_4: Perform cross-validation with resampling
+base_forest_res <- fit_resamples(
+  base_forest_wf %>% add_model(base_forest_spec),
+  resamples = rolling_folds,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_resamples(save_pred = TRUE)
+)
 
-lasso_preds<- predict(lasso_fit, new_data = data)
+# base_5: View fold performance
+base_forest_res %>%
+  collect_metrics() %>%
+  print()
 
-lasso_metrics <- tibble(truth = data$new_cases, predicted = lasso_preds$.pred) %>%
-  metrics(truth = truth, estimate = predicted)
-lasso_metrics
+# base_6: Per-fold metrics
+base_forest_res %>% 
+  collect_predictions() %>%
+  group_by(id) %>%
+  metrics(truth = new_cases, estimate = .pred)
+
+# base_7: Store metrics
+base_forest_metrics <- collect_metrics(base_forest_res)
+
+# base_8: Residuals
+base_forest_preds <- base_forest_res %>%
+  collect_predictions() %>%
+  mutate(residual = new_cases - .pred)
+
+# Plot residuals
+ggplot(base_forest_preds, aes(x = residual)) +
+  geom_histogram(bins = 50, fill = "#2c7fb8", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Histogram of Residuals (Random Forest)",
+    x = "Residual",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+# base_9: Fit final model on full train_data
+base_forest_fit <- base_forest_wf %>%
+  add_model(base_forest_spec) %>%
+  fit(data = train_data)
+
+# base_10: Variable importance plot
+vip(base_forest_fit$fit$fit)
 ```
 
-After the last two models performed poorly, the use of random forest seemed rational as this model can capture more complex relationships. 
 ```{r}
 
 rngseed = 1234
 
+# Forest specification (Random Forest)
 forest_spec <- rand_forest(mode = "regression") %>%
+  set_engine("ranger", seed = rngseed, importance = "impurity")
+
+# Insert recipe
+forest_wf <- workflow() %>%
+  add_recipe(recipe)
+
+# Step 1: Resampling with time-blocked CV (folds from previous code)
+# folds <- group_vfold_cv(train_data, group = fold_id)
+
+# Step 2: Perform cross-validation with resampling
+forest_res <- fit_resamples(
+  forest_wf %>% add_model(forest_spec),    # Add forest model to workflow
+  resamples = rolling_folds,                       # Use the time-blocked folds
+  metrics = metric_set(rmse, rsq, mae),    # Choose evaluation metrics
+  control = control_resamples(save_pred = TRUE)   # Save predictions for each fold
+)
+
+# Step 3: View fold performance
+forest_res %>%
+  collect_metrics() %>%
+  print()
+
+forest_res %>% 
+  collect_predictions() %>%
+  group_by(id) %>%
+  metrics(truth = new_cases, estimate = .pred)
+
+# Store metrics
+forest_metrics <- collect_metrics(forest_res)
+
+forest_preds <- forest_res %>%
+  collect_predictions() %>%
+  mutate(residual = new_cases - .pred)
+
+ggplot(forest_preds, aes(x = residual)) +
+  geom_histogram(bins = 50, fill = "#2c7fb8", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Histogram of Residuals (XGBoost)",
+    x = "Residual",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+forest_fit <- forest_wf %>%
+  add_model(forest_spec) %>%
+  fit(data = train_data)
+
+vip(forest_fit$fit$fit)
+```
+
+Next, I explored the use of an XGBoost model as the Random Forest went well. These models tend to perform better. With slightly improved r-squared and similar MAE, both models are promising and are tuned in code chunks ahead.
+```{r}
+# base_1: Define the XGBoost model specification
+base_boost_spec <- boost_tree(
+  trees = 1000,
+  tree_depth = 6,
+  learn_rate = 0.01,
+  loss_reduction = 0.01,
+  sample_size = 0.8,
+  mtry = 0.8
+) %>%
+  set_engine("xgboost", counts = FALSE) %>%
+  set_mode("regression")
+
+# base_2: Build the workflow with baseline recipe and XGBoost model
+base_boost_wf <- workflow() %>%
+  add_recipe(recipe_baseline) %>%
+  add_model(base_boost_spec)
+
+# base_3: Fit and evaluate the model using cross-validation
+base_boost_res <- fit_resamples(
+  base_boost_wf,
+  resamples = rolling_folds,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_resamples(save_pred = TRUE)
+)
+
+# base_4: View fold performance
+base_boost_res %>%
+  collect_metrics() %>%
+  print()
+
+# base_5: Fold-wise prediction metrics
+base_boost_res %>% 
+  collect_predictions() %>%
+  group_by(id) %>%
+  metrics(truth = new_cases, estimate = .pred)
+
+# base_6: Collect metrics for storage
+base_boost_metrics <- collect_metrics(base_boost_res)
+
+# base_7: Collect predictions and compute residuals
+base_boost_preds <- base_boost_res %>%
+  collect_predictions() %>%
+  mutate(residual = new_cases - .pred)
+
+base_boost_fit <- base_boost_wf %>%
+  fit(data = train_data)
+
+vip(base_boost_fit$fit$fit)
+```
+
+
+```{r}
+# Define the XGBoost model specification
+boost_spec <- boost_tree(
+  trees = 1000,
+  tree_depth = 6,
+  learn_rate = 0.01,
+  loss_reduction = 0.01,
+  sample_size = 0.8,
+  mtry = 0.8
+) %>%
+  set_engine("xgboost", counts = FALSE) %>%
+  set_mode("regression")
+
+# Build the workflow with recipe and model
+boost_wf <- workflow() %>%
+  add_recipe(recipe_baseline) %>%
+  add_model(boost_spec)
+
+# Fit and evaluate the model using cross-validation
+boost_res <- fit_resamples(
+  boost_wf,
+  resamples = rolling_folds,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_resamples(save_pred = TRUE)
+)
+
+# Step 3: View fold performance
+boost_res %>%
+  collect_metrics() %>%
+  print()
+
+boost_res %>% 
+  collect_predictions() %>%
+  group_by(id) %>%
+  metrics(truth = new_cases, estimate = .pred)
+
+boost_metrics <- collect_metrics(boost_res)
+
+boost_fit <- boost_wf %>%
+  fit(data = train_data)
+
+vip(boost_fit$fit$fit)
+```
+
+```{r}
+# Define the Random Forest model with tuning parameters (baseline version)
+base_forest_spec <- rand_forest(
+  mode = "regression", 
+  mtry = tune(),           
+  min_n = tune(),          
+  trees = 500              
+) %>%
+  set_engine("ranger", seed = rngseed)
+
+# Insert baseline recipe
+base_forest_wf <- workflow() %>%
+  add_recipe(recipe_baseline)
+
+# Create grid of hyperparameters for tuning
+base_forest_grid <- grid_regular(
+  mtry(range = c(1, 4)),  
+  min_n(range = c(1, 50)), 
+  levels = 10
+)
+
+# Set seed for reproducibility
+set.seed(1234)
+
+# Tune the Random Forest model using time-blocked CV (folds)
+base_forest_tune_res <- tune_grid(
+  base_forest_wf %>% add_model(base_forest_spec),
+  resamples = rolling_folds,                     
+  grid = base_forest_grid,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_grid(parallel_over = "everything")
+)
+
+# Plot tuning results
+autoplot(base_forest_tune_res)
+
+# Collect and print the performance metrics from tuning
+base_forest_tune_res %>%
+  collect_metrics() %>%
+  print()
+
+# Get best hyperparameters based on R-squared
+base_best_params <- select_best(base_forest_tune_res, metric = "rsq")
+print(base_best_params)
+
+# Final baseline RF model with best parameters
+base_final_forest_spec <- rand_forest(
+  mode = "regression",
+  mtry = base_best_params$mtry,
+  min_n = base_best_params$min_n,
+  trees = 500
+) %>%
+  set_engine("ranger", seed = rngseed)
+
+# Final baseline workflow
+base_final_forest_wf <- workflow() %>%
+  add_recipe(recipe_baseline) %>%
+  add_model(base_final_forest_spec)
+
+# Fit final baseline model on training data
+base_final_forest_fit <- base_final_forest_wf %>%
+  fit(data = train_data)
+
+
+base_final_forest_res <- fit_resamples(
+  base_final_forest_wf,
+  resamples = rolling_folds,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_resamples(save_pred = TRUE)
+)
+
+print(base_final_forest_res)
+
+#test_data <- train_data %>% filter(fold_id == 8)
+
+
+# Predict on test data
+base_final_forest_preds <- predict(base_final_forest_fit, new_data = test_data)
+
+# Prepare prediction results
+base_final_forest_preds <- tibble(
+  truth = test_data$new_cases, 
+  predicted = base_final_forest_preds$.pred
+)
+
+# Evaluate performance
+base_final_forest_metrics <- base_final_forest_preds %>%
+  metrics(truth = truth, estimate = predicted)
+
+print(base_final_forest_metrics)
+```
+
+
+```{r}
+# Define the Random Forest model with tuning parameters
+forest_spec <- rand_forest(
+  mode = "regression", 
+  mtry = tune(),           
+  min_n = tune(),          
+  trees = 500              
+) %>%
   set_engine("ranger", seed = rngseed)
 
 # Insert recipe
 forest_wf <- workflow() %>%
   add_recipe(recipe)
 
-# Create model with all predictors and random forest
-forest_fit <- forest_wf %>%
- add_model(forest_spec) %>%
-  fit(data = data)
-
-
-forest_preds <- predict(forest_fit, new_data = data)
-forest_preds <- tibble(truth = data$new_cases, predicted = forest_preds$.pred)
-forest_rmse <- forest_preds %>%
-  metrics(truth = truth, estimate = predicted)
-print(forest_rmse)
-```
-
-
-```{r}
-# Tuning forest
-forest_spec <- rand_forest(
-  mode = "regression", 
-  trees = 300, 
-  mtry = tune(), 
-  min_n = tune()
-) %>%
-  set_engine("ranger")
-
-# Create grid with set parameters
+# Create grid of hyperparameters for tuning
 forest_grid <- grid_regular(
-  mtry(range = c(1, 7)),  
-  min_n(range = c(1, 21)),  
-  levels = 7  
+  mtry(range = c(1, 8)),  
+  min_n(range = c(1, 50)), 
+  levels = 10
 )
 
-# Set seed
+# Set seed for reproducibility
 set.seed(1234)
 
-# 5 fold crossvalidation repeated 5 times
-# Note: Limitation of computing power so doing rolling window would not work
-cv_folds <- vfold_cv(data, v = 5, repeats = 5)
-plan(multisession, workers = 4)
-
-# Tune the forest
-# This step took 20-ish minutes
+# Tune the Random Forest model using time-blocked CV (folds)
 forest_tune_res <- tune_grid(
   forest_wf %>% add_model(forest_spec),
-  resamples = cv_folds,  
+  resamples = rolling_folds,                     
   grid = forest_grid,
-  metrics = metric_set(rmse, rsq),
+  metrics = metric_set(rmse, rsq, mae),
   control = control_grid(parallel_over = "everything")
 )
 
-# Plot results
+# Plot tuning results to visualize performance across hyperparameters
 autoplot(forest_tune_res)
 
+# Collect and print the performance metrics from the tuning process
 forest_tune_res %>%
-  collect_metrics()
+  collect_metrics() %>%
+  print()
 
-best_params <- select_best(forest_tune_res, metric = "rmse")
-best_params
+# Get the best hyperparameters based on the chosen metric (e.g., R-squared)
+best_params <- select_best(forest_tune_res, metric = "rsq")
+print(best_params)
 
-best_params$trees <- 500
+# Train the final model with the best parameters on the full training set
+final_forest_spec <- rand_forest(
+  mode = "regression",
+  mtry = best_params$mtry,
+  min_n = best_params$min_n,
+  trees = 500
+) %>%
+  set_engine("ranger", seed = rngseed)
+
+# Final model workflow with the best hyperparameters
+final_forest_wf <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(final_forest_spec)
+
+# Fit the final model on the entire training data
+final_forest_fit <- final_forest_wf %>%
+  fit(data = train_data)
+
+# Make predictions on the test data
+final_forest_preds <- predict(final_forest_fit, new_data = test_data)
+
+# Prepare prediction results
+final_forest_preds <- tibble(truth = test_data$new_cases, predicted = final_forest_preds$.pred)
+
+# Calculate RMSE for the final model
+final_forest_metrics <- final_forest_preds %>%
+  metrics(truth = truth, estimate = predicted)
+
+# Print final performance metrics
+print(final_forest_metrics)
+
+final_forest_preds <- final_forest_preds %>%
+  mutate(residual = truth - predicted)
+
+ggplot(final_forest_preds, aes(x = residual)) +
+  geom_histogram(bins = 50, fill = "#2c7fb8", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Histogram of Residuals (XGBoost)",
+    x = "Residual",
+    y = "Count"
+  ) +
+  theme_minimal()
+
 ```
 
 ```{r}
-forest_spec <- rand_forest(
-  mode = "regression",
-  mtry = best_params$mtry,
-  trees = best_params$trees,
-  min_n = best_params$min_n
+# Define the XGBoost model specification (baseline version)
+base_boost_spec <- boost_tree(
+  trees = 500,             # Trees to tune
+  tree_depth = tune(),     # Depth of trees to tune
+  learn_rate = tune(),
+  loss_reduction = tune()
 ) %>%
-  set_engine("ranger", seed = 1234)
+  set_engine("xgboost") %>%
+  set_mode("regression")
 
-forest_fit_final <- forest_wf %>%
-  add_model(forest_spec) %>%
-  fit(data = data)
+# Build the workflow with the baseline recipe and model
+base_boost_wf <- workflow() %>%
+  add_recipe(recipe_baseline) %>%
+  add_model(base_boost_spec)
 
-# Get final predictions
-forest_preds_final <- predict(forest_fit_final, new_data = data)
-forest_preds_final <- tibble(truth = data$new_cases, predicted = forest_preds_final$.pred)
+# Tune the XGBoost model using time-blocked CV (folds)
+base_boost_tune_res <- tune_grid(
+  base_boost_wf,
+  resamples = rolling_folds,
+  grid = 30,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_grid(parallel_over = "everything")
+)
 
-# Calculate performance metrics
-forest_rmse <- forest_preds_final %>%
+# View tuning results
+base_boost_tune_res %>%
+  collect_metrics() %>%
+  print()
+
+# Get the best hyperparameters based on R-squared
+base_best_params <- select_best(base_boost_tune_res, metric = "rsq")
+print(base_best_params)
+
+# Collect the metrics of the best model based on R-squared
+base_best_metrics <- base_boost_tune_res %>%
+  collect_metrics() %>%
+  filter(.config == base_best_params$.config)
+
+# Print best model metrics
+print(base_best_metrics)
+
+# Plot tuning performance
+autoplot(base_boost_tune_res)
+
+# Train the final baseline XGBoost model with best parameters
+base_final_boost_spec <- boost_tree(
+  trees = 500,
+  tree_depth = base_best_params$tree_depth,
+  learn_rate = base_best_params$learn_rate,
+  loss_reduction = base_best_params$loss_reduction
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+# Final model workflow using the baseline recipe
+base_final_boost_wf <- workflow() %>%
+  add_recipe(recipe_baseline) %>%
+  add_model(base_final_boost_spec)
+
+# Fit the final XGBoost baseline model
+base_final_boost_fit <- base_final_boost_wf %>%
+  fit(data = train_data)
+
+# Predict on the test data
+base_final_boost_preds <- predict(base_final_boost_fit, new_data = test_data)
+
+# Prepare results
+base_final_boost_preds <- tibble(
+  truth = test_data$new_cases, 
+  predicted = base_final_boost_preds$.pred
+)
+
+# Calculate final performance metrics
+base_final_boost_metrics <- base_final_boost_preds %>%
   metrics(truth = truth, estimate = predicted)
 
-print(forest_rmse)
+# Print performance metrics
+print(base_final_boost_metrics)
 ```
 
+
+
+```{r}
+# Define the XGBoost model specification
+boost_spec <- boost_tree(
+  trees = 500,             # Trees to tune
+  tree_depth = tune(),     # Depth of trees to tune
+  learn_rate = tune(),
+  loss_reduction = tune()
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+# Build the workflow with recipe and model
+boost_wf <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(boost_spec)
+
+# Tune the XGBoost model using time-blocked CV (folds)
+boost_tune_res <- tune_grid(
+  boost_wf,
+  resamples = rolling_folds,
+  grid = 30,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_grid(parallel_over = "everything")
+)
+
+# View tuning results
+boost_tune_res %>%
+  collect_metrics() %>%
+  print()
+
+# Get the best hyperparameters based on R-squared
+best_params <- select_best(boost_tune_res, metric = "rsq")
+print(best_params)
+
+# Collect the metrics of the best model based on R-squared
+best_metrics <- boost_tune_res %>%
+  collect_metrics() %>%
+  filter(.config == best_params$.config)
+
+# Print the metrics (R-squared, RMSE, MAE) for the best model
+print(best_metrics)
+
+# Plot the results of the tuning process
+autoplot(boost_tune_res)
+
+# Train the final model with the best parameters on the full training set
+final_boost_spec <- boost_tree(
+  trees = 500,
+  tree_depth = best_params$tree_depth,
+  learn_rate = best_params$learn_rate
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+# Final model workflow with the best hyperparameters
+final_boost_wf <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(final_boost_spec)
+
+# Fit the final XGBoost model on the entire training data
+final_boost_fit <- final_boost_wf %>%
+  fit(data = train_data)
+
+# Make predictions on the test data
+final_boost_preds <- predict(final_boost_fit, new_data = test_data)
+
+# Prepare prediction results (truth and predicted values)
+final_boost_preds <- tibble(truth = test_data$new_cases, predicted = final_boost_preds$.pred)
+
+# Calculate RMSE, MAE, and R-squared for the final model
+final_boost_metrics <- final_boost_preds %>%
+  metrics(truth = truth, estimate = predicted)
+
+# Print final performance metrics (RMSE, MAE, and R-squared)
+print(final_boost_metrics)
+
+final_boost_preds <- final_boost_preds %>%
+  mutate(residual = truth - predicted)
+
+ggplot(final_boost_preds, aes(x = residual)) +
+  geom_histogram(bins = 50, fill = "#2c7fb8", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Histogram of Residuals (XGBoost)",
+    x = "Residual",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+base_lm_metrics <- base_lm_metrics %>% 
+  mutate(model = "Linear Regression (Baseline)") %>%
+  select(-n, -std_err, -.config, -.estimator)
+
+lm_metrics <- lm_metrics %>% 
+  mutate(model = "Linear Regression") %>%
+  select(-n, -std_err, -.config, -.estimator)
+
+base_forest_metrics <- base_forest_metrics %>% 
+  mutate(model = "Random Forest (Baseline)") %>%
+  select(-n, -std_err, -.config, -.estimator)
+
+forest_metrics <- forest_metrics %>% 
+  mutate(model = "Random Forest") %>%
+  select(-n, -std_err, -.config, -.estimator)
+
+base_boost_metrics <- base_boost_metrics %>% 
+  mutate(model = "XGBoost (Baseline)") %>%
+  select(-n, -std_err, -.config, -.estimator)
+
+boost_metrics <- boost_metrics %>% 
+  mutate(model = "XGBoost") %>%
+  select(-n, -std_err, -.config, -.estimator)
+
+final_boost_metrics <- final_boost_metrics %>%
+  mutate(model = "Tuned XGBoost") %>%
+  rename(mean = .estimate)
+
+final_forest_metrics <- final_forest_metrics %>%
+  mutate(model = "Tuned Random Forest") %>%
+  rename(mean = .estimate)
+
+base_final_boost_metrics <- base_final_boost_metrics %>%
+  mutate(model = "Tuned XGBoost (Baseline)") %>%
+  rename(mean = .estimate)
+
+base_final_forest_metrics <- base_final_forest_metrics %>%
+  mutate(model = "Tuned Random Forest (Baseline)") %>%
+  rename(mean = .estimate)
+
+model_metrics <- bind_rows(base_lm_metrics, lm_metrics, base_forest_metrics, forest_metrics, base_boost_metrics, boost_metrics, base_final_boost_metrics, final_boost_metrics, base_final_forest_metrics, final_forest_metrics)
+
+model_metrics <- model_metrics %>%
+  select(-.estimator) %>%
+  pivot_wider(names_from = '.metric', values_from = mean)
+```
+
+```{r}
+library(gt)
+
+model_table <- model_metrics %>%
+  gt() %>%
+  tab_header(
+    title = "Model Performance Metrics",
+    subtitle = "Best values are highlighted per metric"
+  ) %>%
+  fmt_number(columns = c(rmse, mae), decimals = 1) %>%
+  fmt_number(columns = rsq, decimals = 3) %>%
+  cols_label(
+    model = "Model",
+    rmse = "RMSE",
+    rsq = "R²",
+    mae = "MAE"
+  ) %>%
+
+  # Highlight lowest RMSE
+  tab_style(
+    style = cell_fill(color = "lightgreen"),
+    locations = cells_body(
+      columns = rmse,
+      rows = rmse == min(rmse, na.rm = TRUE)
+    )
+  ) %>%
+
+  # Highlight lowest MAE
+  tab_style(
+    style = cell_fill(color = "lightgreen"),
+    locations = cells_body(
+      columns = mae,
+      rows = mae == min(mae, na.rm = TRUE)
+    )
+  ) %>%
+
+  # Highlight highest R²
+  tab_style(
+    style = cell_fill(color = "lightgreen"),
+    locations = cells_body(
+      columns = rsq,
+      rows = rsq == max(rsq, na.rm = TRUE)
+    )
+  ) %>%
+
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_options(
+    table.width = pct(100),
+    table.align = "left",
+    column_labels.padding = px(10),
+    data_row.padding = px(6)
+  )
+
+library(gtExtras)
+library(webshot2)
+
+print(model_table)
+
+gtsave(model_table, here("results", "figures", "models.png"))
+```
