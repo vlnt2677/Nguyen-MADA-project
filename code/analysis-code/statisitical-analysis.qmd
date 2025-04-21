@@ -349,6 +349,7 @@ vip(lag_final_lasso_fit$fit$fit)
 
 
 ```
+
 ```{r}
 # plot baseline lasso model prediction vs actual
 plot_base_lasso <- base_final_lasso_test_results %>%
