@@ -18,7 +18,6 @@ library(lubridate)
 library(readxl)
 library(stringr)
 library(skimr)
-
 library(tigris)
 library(sf)
 ```

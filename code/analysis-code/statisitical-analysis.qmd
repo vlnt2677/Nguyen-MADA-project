@@ -23,6 +23,9 @@ library(future)
 library(vip)
 library(lubridate)
 library(patchwork)
+library(gtExtras)
+library(webshot2)
+library(gt)
 ```
 
 Load in processed data and set eed
@@ -98,6 +101,7 @@ fold_sizes <- purrr::map_dfr(rolling_folds$splits, function(split) {
   )
 })
 
+# Print
 print(fold_sizes)
 
 # Check date ranges
@@ -354,8 +358,8 @@ vip(lag_final_lasso_fit$fit$fit)
 # plot baseline lasso model prediction vs actual
 plot_base_lasso <- base_final_lasso_test_results %>%
   ggplot(aes(x = new_cases, y = predicted)) +
-  geom_point(alpha = 0.6, color = "darkgreen") +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  geom_point(alpha = 0.6, color = "#69b3a2") +
+  geom_abline(slope = 1, intercept = 0, color = "#DBA2A2", linetype = "dashed") +
   labs(
     title = "Base Lasso",
     x = "Actual Cases", y = "Predicted Cases"
@@ -365,8 +369,8 @@ plot_base_lasso <- base_final_lasso_test_results %>%
 # plot mobility lasso model prediction vs actual
 plot_lasso <- final_lasso_test_results %>%
   ggplot(aes(x = new_cases, y = predicted)) +
-  geom_point(alpha = 0.6, color = "steelblue") +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  geom_point(alpha = 0.6, color = "#BFA2DB") +
+  geom_abline(slope = 1, intercept = 0, color = "#DBA2A2", linetype = "dashed") +
   labs(
     title = "Lasso",
     x = "Actual Cases", y = "Predicted Cases"
@@ -376,14 +380,15 @@ plot_lasso <- final_lasso_test_results %>%
 # plot lagged lasso model prediction vs actual
 plot_lag_lasso <- lag_final_lasso_test_results %>%
   ggplot(aes(x = new_cases, y = predicted)) +
-  geom_point(alpha = 0.6, color = "purple") +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  geom_point(alpha = 0.6, color = "#F2C29B") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "#DBA2A2") +
   labs(
     title = "Lag Lasso",
     x = "Actual Cases", y = "Predicted Cases"
   ) +
   theme_bw()
 
+# Combine + formatting
 lasso_graphs <- plot_base_lasso + plot_lasso + plot_lag_lasso +
   plot_layout(ncol = 3, widths = c(1.5, 1.5, 1.5)) &
   theme(
@@ -393,8 +398,10 @@ lasso_graphs <- plot_base_lasso + plot_lasso + plot_lag_lasso +
     axis.text = element_text(size = 10)
   )
 
+# Print graph for inspection
 print(lasso_graphs)
 
+# Save file
 figure_file = here("results", "figures", "lasso_graphs.png")
 ggsave(
   filename = figure_file,
@@ -636,8 +643,8 @@ print(lag_final_rf_test_metrics)
 # plot baseline rf model prediction vs actual
 plot_base_rf <- base_final_rf_test_results %>%
   ggplot(aes(x = new_cases, y = predicted)) +
-  geom_point(alpha = 0.6, color = "darkgreen") +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  geom_point(alpha = 0.6, color = "#69b3a2") +
+  geom_abline(slope = 1, intercept = 0, color = "#DBA2A2", linetype = "dashed") +
   labs(
     title = "Base RF",
     x = "Actual Cases", y = "Predicted Cases"
@@ -647,8 +654,8 @@ plot_base_rf <- base_final_rf_test_results %>%
 # plot mobility rf model prediction vs actual
 plot_rf <- final_rf_test_results %>%
   ggplot(aes(x = new_cases, y = predicted)) +
-  geom_point(alpha = 0.6, color = "steelblue") +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  geom_point(alpha = 0.6, color = "#BFA2DB") +
+  geom_abline(slope = 1, intercept = 0, color = "#DBA2A2", linetype = "dashed") +
   labs(
     title = "RF with Mobility",
     x = "Actual Cases", y = "Predicted Cases"
@@ -658,14 +665,15 @@ plot_rf <- final_rf_test_results %>%
 # plot lagged rf model prediction vs actual
 plot_lag_rf <- lag_final_rf_test_results %>%
   ggplot(aes(x = new_cases, y = predicted)) +
-  geom_point(alpha = 0.6, color = "purple") +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  geom_point(alpha = 0.6, color = "#F2C29B") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "#DBA2A2") +
   labs(
     title = "RF with Lagged Mobility",
     x = "Actual Cases", y = "Predicted Cases"
   ) +
   theme_bw()
 
+# Combine + formatting
 rf_graphs <- plot_base_rf + plot_rf + plot_lag_rf +
   plot_layout(ncol = 3, widths = c(1.5, 1.5, 1.5)) &
   theme(
@@ -675,8 +683,10 @@ rf_graphs <- plot_base_rf + plot_rf + plot_lag_rf +
     axis.text = element_text(size = 10)
   )
 
+# Print for visual inspection
 print(rf_graphs)
 
+# Save file
 figure_file = here("results", "figures", "rf_graphs.png")
 ggsave(
   filename = figure_file,
@@ -743,11 +753,13 @@ base_final_boost_fit <- base_final_boost_wf %>%
 # Predict on test data and compute performance metrics
 base_final_boost_preds <- predict(base_final_boost_fit, new_data = test_data)
 
+# Create tibble with truth and predcitions
 base_final_boost_results <- tibble(
   truth = test_data$new_cases,
   predicted = base_final_boost_preds$.pred
 )
 
+# Calculate metrics using previous tibble
 base_final_boost_metrics <- base_final_boost_results %>%
   metrics(truth = truth, estimate = predicted)
 
@@ -801,11 +813,13 @@ final_boost_fit <- final_boost_wf %>%
 # Predict on test data and compute performance metrics
 final_boost_preds <- predict(final_boost_fit, new_data = test_data)
 
+# Create tibble with truth and predcitions
 final_boost_results <- tibble(
   truth = test_data$new_cases,
   predicted = final_boost_preds$.pred
 )
 
+# Calculate metrics using previous tibble
 final_boost_metrics <- final_boost_results %>%
   metrics(truth = truth, estimate = predicted)
 
@@ -860,11 +874,13 @@ lag_final_boost_fit <- lag_final_boost_wf %>%
 # Predict on test data and compute performance metrics
 lag_final_boost_preds <- predict(lag_final_boost_fit, new_data = test_data)
 
+# Create tibble with truth and predcitions
 lag_final_boost_results <- tibble(
   truth = test_data$new_cases,
   predicted = lag_final_boost_preds$.pred
 )
 
+# Calculate metrics using previous tibble
 lag_final_boost_metrics <- lag_final_boost_results %>%
   metrics(truth = truth, estimate = predicted)
 
@@ -876,8 +892,8 @@ print(lag_final_boost_metrics)
 # plot baseline boost model prediction vs. actual
 plot_base_boost <- base_final_boost_results %>%
   ggplot(aes(x = truth, y = predicted)) +
-  geom_point(alpha = 0.6, color = "darkgreen") +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  geom_point(alpha = 0.6, color = "#69b3a2") +
+  geom_abline(slope = 1, intercept = 0, color = "#DBA2A2", linetype = "dashed") +
   labs(
     title = "Base Boost",
     x = "Actual Cases", y = "Predicted Cases"
@@ -887,8 +903,8 @@ plot_base_boost <- base_final_boost_results %>%
 # plot mobility boost model prediction vs actual
 plot_boost <- final_boost_results %>%
   ggplot(aes(x = truth, y = predicted)) +
-  geom_point(alpha = 0.6, color = "steelblue") +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  geom_point(alpha = 0.6, color = "#BFA2DB") +
+  geom_abline(slope = 1, intercept = 0, color = "#DBA2A2", linetype = "dashed") +
   labs(
     title = "Boost with Mobility",
     x = "Actual Cases", y = "Predicted Cases"
@@ -898,14 +914,15 @@ plot_boost <- final_boost_results %>%
 # plot lagged boost model prediction vs actual
 plot_lag_boost <- lag_final_boost_results %>%
   ggplot(aes(x = truth, y = predicted)) +
-  geom_point(alpha = 0.6, color = "purple") +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  geom_point(alpha = 0.6, color = "#F2C29B") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "#DBA2A2") +
   labs(
     title = "Boost with Lagged Mobility",
     x = "Actual Cases", y = "Predicted Cases"
   ) +
   theme_bw()
 
+# Combine graphs + formatting
 boost_graphs <- plot_base_boost + plot_boost + plot_lag_boost +
   plot_layout(ncol = 3, widths = c(1.5, 1.5, 1.5)) &
   theme(
@@ -915,8 +932,10 @@ boost_graphs <- plot_base_boost + plot_boost + plot_lag_boost +
     axis.text = element_text(size = 10)
   )
 
+# Print for visual inspection
 print(boost_graphs)
 
+# Save file
 figure_file = here("results", "figures", "boost_graphs.png")
 ggsave(
   filename = figure_file,
@@ -929,6 +948,8 @@ ggsave(
 
 This code chunk merges the results of the best models into a data frame.
 ```{r}
+# Reformat these data frames for joining
+
 base_lasso_metrics <- base_final_lasso_test_metrics %>% 
   mutate(model = "LASSO (Baseline)") %>%
   rename(mean = .estimate)
@@ -965,8 +986,10 @@ lag_forest_metrics <- lag_final_rf_test_metrics %>%
   mutate(model = "Random Forest (Lagged Mobility)") %>%
   rename(mean = .estimate)
 
+# Join all metrics together
 model_metrics <- bind_rows(base_lasso_metrics, lasso_metrics, lag_lasso_metrics, base_final_boost_metrics, final_boost_metrics, lag_boost_metrics, base_final_forest_metrics, final_forest_metrics, lag_forest_metrics)
 
+# Pivot and remove unncessary columns
 model_metrics <- model_metrics %>%
   select(-.estimator) %>%
   pivot_wider(names_from = '.metric', values_from = mean)
@@ -974,8 +997,7 @@ model_metrics <- model_metrics %>%
 
 This code chunk creates a short summary table of the results from the model_metrics data frame.
 ```{r}
-library(gt)
-
+# Create gt table
 model_table <- model_metrics %>%
   gt() %>%
   tab_header(
@@ -1028,9 +1050,6 @@ model_table <- model_metrics %>%
     column_labels.padding = px(10),
     data_row.padding = px(6)
   )
-
-library(gtExtras)
-library(webshot2)
 
 print(model_table)
 
