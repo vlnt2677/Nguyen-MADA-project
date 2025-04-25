@@ -1,0 +1,186 @@
+---
+title: Project Review Overall Score - 3
+author: Guozheng Yang
+date: 04/21/2025
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+---
+
+# Overview
+
+Title of project: Assessing the Added Predictive Power of Google’s Community Mobility Report for COVID-19 Forecasting on a County-Level
+
+Name of project author(s): Vincent Nguyen
+
+Name of project reviewer: Guozheng Yang
+
+
+
+# Specific project content evaluation
+
+## Background, Context and Motivation
+
+### Feedback and Comments
+
+The background section is clearly written and well-referenced, providing a solid explanation of the COVID-19 timeline and the role of human mobility in infectious disease dynamics. The inclusion of public health response measures (e.g., lockdowns and behavioral shifts) sets the context well. The introduction of machine learning methods is appropriate and demonstrates a thoughtful application to the research question. I like how the author structured the introduction section into three sub-sections. The logic flow is smooth.
+
+The project has a strong motivation, with a well-demonstrated rationale for integrating mobility data into prediction models. A stronger emphasis on what makes this work novel (e.g., the county-level focus in Georgia or comparisons across models) would enhance the framing.
+
+### Summary assessment
+
+* strong contextualization and motivation
+
+
+
+## Question description
+
+### Feedback and Comments
+
+The research questions are clearly stated. The author aims to assess the additive value of mobility data for predicting COVID-19 incidence using machine learning models. The hypotheses are testable and directly tied to the contents taught in this class.
+
+One small improvement would be to more explicitly define how the author identify the "best" model by assessing different model performance metrics. If the author wants to comprehensively judge the advantages and disadvantages of each model, it is sufficient to state it clearly in one or two sentences.
+
+### Summary assessment
+
+* question/hypotheses fully clear
+
+
+
+## Data description
+
+### Feedback and Comments
+
+The data sources are described clearly, and relevant metadata (e.g., source names, time coverage, and inclusion criteria) are provided. It is good that the author also appropriately acknowledges limitations in the Google Mobility data set (e.g., lack of rural data). The process of filtering and constructing the final data set (44 counties with >=80% completeness) is described concisely.
+
+One question: do the excluded 115 counties have geographical clustering patterns? Were they excluded just because they are in the rural area? It is totally fine if the author did not check that, I'm just curious.
+
+### Summary assessment
+
+* source and overall structure of data well explained
+
+
+
+## Data wrangling and exploratory analysis
+
+### Feedback and Comments
+
+The data wrangling and cleaning process is sufficiently explained, and the author has appropriately handled missingness by filtering out incomplete counties. The exploratory visualizations (e.g., time-series plots, density plots, mobility trends) are helpful and well-integrated with the narrative. The correlation analysis supports model feature engineering.
+
+One minor improvement would be to explain the mobility indicators excluded due to missing data in more detail, and whether any imputation strategies were considered. Also, it would be great if the author could demonstrate why the rolling windows were set to 120 days / 30 days. Is this validated by previous studies or just suitable for this data set? 
+
+### Summary assessment
+
+* essentially no weaknesses in wrangling and exploratory component
+
+
+
+## Appropriateness of Analysis
+
+### Feedback and Comments
+
+The modeling approach is well thought out, using LASSO, Random Forest, and XGBoost. The justification for avoiding traditional time series models (due to non-normality and non-stationarity) is sound. The use of cross-validation with rolling windows is a strength and reflects good understanding of time-series prediction challenges.
+
+The evaluation metrics (RMSE, MAE, R-square) are appropriate, and the author shows good command of tuning and validation. One small suggestion: the author may want to comment on why RMSE was prioritized over MAE for final model ranking, or present both equally.
+
+### Summary assessment
+
+* strong and reasonable analysis
+
+
+
+## Presentation
+
+### Feedback and Comments
+
+Figures and tables are generally clean and well-labeled. The performance comparison is clearly presented. However, the author could add more details in figure captions for standalone interpretation. Also, figures in the 5.2 and 5.3 sub-sections do not have the indexing number (e.g., Figure X.X).
+
+Overall, visual materials support the narrative well.
+
+### Summary assessment
+
+* results are very well presented
+
+
+
+## Discussion/Conclusions
+
+### Feedback and Comments
+
+The discussion effectively summarizes results and reflects on model performance across the different feature sets and algorithms. The interpretation of lagged mobility predictors improving forecasting accuracy is logical and linked to incubation periods and reporting lag. Limitations are well acknowledged as well, especially regarding data completeness and potential confounding. The suggestion for future work (e.g., integrating policy or behavioral variables) is on point. 
+
+A minor suggestion is to refer to existing literature to discuss the consistent and inconsistent findings of this study. The author mentioned "This aligns with previous epidemiological findings suggesting that population movement precedes changes in infectious rates, often with a delay due to disease incubation and reporting lag." but no paper is cited. The author could also elaborate slightly more on public health implications (e.g., how mobility data could support real-time response or alert systems).
+
+### Summary assessment
+
+* strong, complete and clear discussion
+
+
+
+## Further comments
+
+Excellent work overall. The cross-validation design and feature engineering with time-lagged mobility predictors are well executed. The author clearly demonstrates an understanding of the modeling process and thoughtfully discusses limitations. But small improvements are needed. For example, a code chunk accidentally appears in the manuscript. 
+
+
+
+# Overall project content evaluation
+
+## Structure
+
+### Feedback and Comments
+
+The folder and file structure appear straightforward. File names are intuitive, and no unnecessary files are included. I also like the detailed instructions provided in each README file. I could easily follow the workflow in this project.
+
+It would be better if the author could provide more instructions in the README file in the analysis-code folder.
+
+### Summary assessment
+
+* well structured
+
+
+## Documentation 
+
+### Feedback and Comments
+
+The author retained the structural framework of the template folders. Overall, the project folder is well-organized: clean, concise, and free of redundant files. Each executable file contains a necessary README file in the same folder, which greatly enhances usability for readers. Additionally, the executable files are sufficiently annotated to explain each step, further demonstrating the author's attention to clarity and reproducibility.
+
+One minor suggestion: the poster folder seems redundant.
+
+### Summary assessment
+
+* fully and well documented
+
+
+
+## Reproducibility
+
+### Feedback and Comments
+
+The author put great effort in coding. The code for Random Forest got my laptop frozen, so I decided to shrink the range of for parameter tuning to quickly check the reproducibility. Overall, the analysis appears fully reproducible. Great job! 
+
+### Summary assessment
+
+* fully reproducible without issues
+
+
+
+## Thoroughness
+
+### Feedback and Comments
+
+The study demonstrates a strong level of thoroughness in modeling and data analysis. I like it that the author examines feature sets thoughtfully and integrates epidemiological reasoning into the modeling choices. The limitations and future directions are also clearly laid out in the discussion section. It is a very complete course project.
+
+### Summary assessment
+
+* strong level of thorougness
+
+
+
+## Further comments
+
+This is a well-managed course project. The analysis is presented in a clear and professional manner. The comparisons across models are insightful, and covers enough contents from this course. 
+
+
+
