@@ -107,3 +107,31 @@ The discussion correctly interprets findings in relation to the modeling results
 
 Running the full analysis-code file took more than 2 hours to complete.
 
+
+## Reproducibility
+Are all results fully reproducible? Is documentation provided which clearly explains how to reproduce things, and does it work without the need for any manual intervention? Are you able to re-run the whole analysis without having to do manual interventions/edits?
+
+### Feedback and Comments
+
+The project is fully reproducible, with all code executing smoothly and generating the expected outputs, including figures and tables. The analysis runs without any need for manual intervention, and all necessary data files and scripts are included in the repository. This reflects strong adherence to reproducible research standards.
+
+### Summary assessment
+* fully reproducible without issues
+
+
+## Thoroughness
+How thorough was the overall study? Were alternatives (e.g. different ways of processing the data or different models) considered? Were alternatives discussed? Were the questions/hypotheses fully and thoroughly addressed?
+
+### Feedback and Comments
+
+The project demonstrates a strong level of thoroughness. Multiple modeling approaches were considered.
+
+### Summary assessment
+* strong level of thorougness
+
+
+## Further comments
+
+Overall, Great Job!
+
+
