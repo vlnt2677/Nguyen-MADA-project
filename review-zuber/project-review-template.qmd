@@ -1,0 +1,109 @@
+---
+title: Project Review  
+author: Mohammed Zuber
+date: date-modified
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+---
+
+# Overview
+
+Title of project: Assessing the Added Predictive Power of Google’s Community Mobility Report for COVID-19 Forecasting on a County-Level
+
+Name of project author(s): Vincent Nguyen
+
+Name of project reviewer: Mohammed Zuber
+
+
+# Score
+Overall Score: 3 (Sufficient)
+The project is complete, well-executed, and thoughtfully designed. Minor improvements in documentation and runtime optimization could be addressed, but the core analysis is sound and meets all expectations.
+
+# Specific project content evaluation
+
+## Background, Context and Motivation
+How well is the context of the project described? Is a comprehensive background, including summary of previous/related work given? Is the project well placed into the context of existing work (including proper referencing of existing work). Is it clear why the project was undertaken and what new information it hopes to provide?
+
+### Feedback and Comments
+
+The manuscript provides a clear and well-structured background on the COVID-19 pandemic, the relevance of mobility dynamics, and the utility of machine learning in disease modeling. The rationale for exploring the predictive power of mobility data is strong, especially given the novelty of such data during the pandemic. The introduction thoroughly places the study in the context of existing literature and real-world relevance.
+
+### Summary assessment (PICK ONE, DELETE THE OTHERS)
+* strong contextualization and motivation
+
+
+## Question description
+How well and clear are the question(s)/hypotheses the project aims to address described? Is it clear how the questions relate to the data?
+
+
+### Feedback and Comments
+The objective of evaluating whether mobility dynamics add predictive value to COVID-19 forecasting is clearly stated. The alignment between the problem statement, data structure, and modeling goals is well articulated.
+
+### Summary assessment
+* question/hypotheses fully clear
+
+
+## Data description
+How well is the data overall described? Is the source provided? Is a codebook or other meta-information available that makes it clear what the data is? 
+
+### Feedback and Comments
+
+Feedback and Comments:
+The sources of the data (Google Mobility Reports and Johns Hopkins COVID-19 data) are clearly cited, and the construction of the final dataset is well explained, including the filtering criteria and time frame. However, the project folder appears to lack a codebook or variable dictionary, which would be important for clearly understanding the features used in modeling. Additionally, the README files in the processing-code, eda-code, and analysis-code folders should be updated to describe what each script does, in what order they should be run, and any dependencies required. This would greatly improve transparency and facilitate easier replication or adaptation of the analysis.
+
+### Summary assessment
+* source and overall structure of data somewhat explained
+
+
+
+## Data wrangling and exploratory analysis
+How well is the data cleaned/processed and explored? Are all steps reasonable and well explained? Are alternatives discussed and considered? Are meaningful exploratory results shown (e.g. in the supplementary materials)?
+
+### Feedback and Comments
+
+The manuscript shows thoughtful data wrangling, including filtering for completeness and temporal consistency. The exploratory analysis is comprehensive, with visualizations illustrating trends in mobility and case counts, as well as skewness and kurtosis in the data. These insights informed the choice of models that can handle non-normality.
+
+### Summary assessment
+* essentially no weaknesses in wrangling and exploratory component
+
+
+
+## Appropriateness of Analysis
+Were the analysis methods appropriate for the data? Was the analysis done properly? Were different components of the analysis (e.g. performance measure, variable selection, data pre-processing, model evaluation) done in the best way possible and explained well?
+
+### Feedback and Comments
+
+The use of LASSO, Random Forest, and XGBoost is well justified given the data properties. The rationale for excluding ARIMA due to non-stationarity is appropriate. Cross-validation using a rolling origin design reflects real-world forecasting logic. Feature engineering with lagged predictors is methodologically sound.
+
+### Summary assessment
+* strong and reasonable analysis
+
+## Presentation
+How well are results presented? Are tables and figures easy to read and understand? Are the main figures/tables publication level quality? 
+
+### Feedback and Comments
+
+The figures and tables are clear and appropriate for illustrating model performance and data trends.
+
+### Summary assessment
+* results are very well presented
+
+
+## Discussion/Conclusions
+Are the study findings properly discussed? Are strengths and limitations acknowledged? Are findings interpreted properly?
+
+### Feedback and Comments
+
+The discussion correctly interprets findings in relation to the modeling results and existing literature. The strengths and limitations are explicitly addressed in a dedicated section, which adds to the completeness of the manuscript. It might help to more clearly tie model limitations (e.g., RF overfitting) to specific data properties for a deeper reflection.
+
+### Summary assessment
+* strong, complete and clear discussion
+
+
+## Further comments
+
+Running the full analysis-code file took more than 2 hours to complete.
+
