@@ -107,24 +107,48 @@ print(fold_sizes)
 # Check date ranges
 range(train_data$date)
 range(test_data$date)
-
 ```
 
-Recipe setting for modeling
+Recipe setting for modeling. Also rename the variable names.
 ```{r}
 # Recipe for baseline model
-recipe_baseline <- recipe(new_cases ~ pop_density + lag_1 + lag_7 + lag_14, data = data)
+recipe_baseline <- recipe(new_cases ~ pop_density + lag_1 + lag_7 + lag_14, data = data) %>% step_rename(
+  Population_Density = pop_density,
+    Lag_1_Day = lag_1,
+    Lag_7_Days = lag_7,
+    Lag_14_Days = lag_14
+)
 
 # Recipe with all predictors
 recipe <- recipe(new_cases ~ pop_density +
-                  retail_and_recreation_percent_change_from_baseline +
+                   retail_and_recreation_percent_change_from_baseline +
                    grocery_and_pharmacy_percent_change_from_baseline + 
                    workplaces_percent_change_from_baseline +
                    residential_percent_change_from_baseline +
-                     lag_1 + lag_7 + lag_14, data = data)
+                   lag_1 + lag_7 + lag_14, data = data) %>%
+  step_rename(
+    Population_Density = pop_density,
+    Retail_Mobility = retail_and_recreation_percent_change_from_baseline,
+    Grocery_Mobility = grocery_and_pharmacy_percent_change_from_baseline,
+    Workplace_Mobility = workplaces_percent_change_from_baseline,
+    Residential_Mobility = residential_percent_change_from_baseline,
+    Lag_1_Day = lag_1,
+    Lag_7_Days = lag_7,
+    Lag_14_Days = lag_14
+  )
 
 # Recipe with lagged versions of mobility
-recipe_lag <- recipe(new_cases ~ pop_density + retail_lag7 + grocery_lag7 + residential_lag7 + workplace_lag7 + lag_1 + lag_7 + lag_14, data = data)
+recipe_lag <- recipe(new_cases ~ pop_density + retail_lag7 + grocery_lag7 + residential_lag7 + workplace_lag7 + lag_1 + lag_7 + lag_14, data = data) %>%
+  step_rename(
+    Population_Density = pop_density,
+    Retail_Mobility_Lag7 = retail_lag7,
+    Grocery_Mobility_Lag7 = grocery_lag7,
+    Residential_Mobility_Lag7 = residential_lag7,
+    Workplace_Mobility_Lag7 = workplace_lag7,
+    Lag_1_Day = lag_1,
+    Lag_7_Days = lag_7,
+    Lag_14_Days = lag_14
+  )
 ```
 
 Modeling
@@ -205,10 +229,42 @@ base_final_lasso_test_metrics <- base_final_lasso_test_results %>%
 
 # View the test set performance for the final Lasso model
 print(base_final_lasso_test_metrics)
+```
+
+Collect Metrics and VIP
+```{r}
+# Collect CV metrics and drop extra columns
+base_final_lasso_cv_metrics <- collect_metrics(base_final_lasso_res) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
+
+# Prepare Test metrics to match
+base_final_lasso_test_metrics_fixed <- base_final_lasso_test_metrics %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_base_lasso_metrics <- bind_rows(
+  base_final_lasso_cv_metrics,
+  base_final_lasso_test_metrics_fixed
+)
+
+# View the final combined metrics
+print(all_base_lasso_metrics)
 
 # View variable importance for the Lasso model
-vip(base_final_lasso_fit$fit$fit)
+vip_base_lasso <- vip(base_final_lasso_fit$fit$fit)
 
+# Alter aesthetics
+vip_base_lasso <- vip_base_lasso + labs(
+  title = "Baseline LASSO Variable Importance",
+  x = "Importance",
+  y = "Feature"
+) + theme_bw()
+
+figure_file = here("results", "figures", "vip_base_lasso.png")
+ggsave(filename = figure_file, plot = vip_base_lasso, width = 8, height = 6, dpi = 300)
 ```
 
 This code chunk fits a linear regression model with mobility predictors.
@@ -277,9 +333,47 @@ final_lasso_test_metrics <- final_lasso_test_results %>%
 
 # View test set performance
 print(final_lasso_test_metrics)
+```
 
-# View variable importance
-vip(final_lasso_fit$fit$fit)
+Collect Metrics and VIP
+```{r}
+# Collect CV metrics and drop extra columns
+final_lasso_cv_metrics <- collect_metrics(final_lasso_res) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
+
+# Prepare Test metrics to match
+final_lasso_test_metrics_fixed <- final_lasso_test_metrics %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_lasso_metrics <- bind_rows(
+  final_lasso_cv_metrics,
+  final_lasso_test_metrics_fixed
+)
+
+# View the final combined metrics
+print(all_lasso_metrics)
+
+# Plot VIP
+vip_full_lasso <- vip(final_lasso_fit$fit$fit)
+
+# Alter aesthetics
+vip_full_lasso <- vip_full_lasso + 
+  labs(
+    title = "LASSO with Mobility Variable Importance",
+    x = "Importance",
+    y = "Feature"
+  ) + 
+  theme_bw()
+
+# Define save location
+figure_file <- here("results", "figures", "vip_full_lasso.png")
+
+# Save plot
+ggsave(filename = figure_file, plot = vip_full_lasso, width = 8, height = 6, dpi = 300)
 ```
 
 ```{r}
@@ -347,10 +441,47 @@ lag_final_lasso_test_metrics <- lag_final_lasso_test_results %>%
 
 # View test set performance
 print(lag_final_lasso_test_metrics)
+```
 
-# View variable importance
-vip(lag_final_lasso_fit$fit$fit)
+Collect Metrics and VIP
+```{r}
+# Collect CV metrics and drop extra columns
+lag_final_lasso_cv_metrics <- collect_metrics(lag_final_lasso_res) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
 
+# Prepare Test metrics to match
+lag_final_lasso_test_metrics_fixed <- lag_final_lasso_test_metrics %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_lag_lasso_metrics <- bind_rows(
+  lag_final_lasso_cv_metrics,
+  lag_final_lasso_test_metrics_fixed
+)
+
+# View the final combined metrics
+print(all_lag_lasso_metrics)
+
+# Plot VIP
+vip_lag_lasso <- vip(lag_final_lasso_fit$fit$fit)
+
+# Alter aesthetics
+vip_lag_lasso <- vip_lag_lasso + 
+  labs(
+    title = "LASSO with Lagged Mobility Variable Importance",
+    x = "Importance",
+    y = "Feature"
+  ) + 
+  theme_bw()
+
+# Define save location
+figure_file <- here("results", "figures", "vip_lag_lasso.png")
+
+# Save plot
+ggsave(filename = figure_file, plot = vip_lag_lasso, width = 8, height = 6, dpi = 300)
 
 ```
 
@@ -393,10 +524,11 @@ lasso_graphs <- plot_base_lasso + plot_lasso + plot_lag_lasso +
   plot_layout(ncol = 3, widths = c(1.5, 1.5, 1.5)) &
   theme(
     plot.margin = margin(10, 10, 10, 10),
-    plot.title = element_text(size = 14, hjust = 0.5),
-    axis.title = element_text(size = 12),
-    axis.text = element_text(size = 10)
+    plot.title = element_text(size = 20, hjust = 0.5),
+    axis.title = element_text(size = 18),
+    axis.text = element_text(size = 16)
   )
+
 
 # Print graph for inspection
 print(lasso_graphs)
@@ -406,9 +538,8 @@ figure_file = here("results", "figures", "lasso_graphs.png")
 ggsave(
   filename = figure_file,
   plot = lasso_graphs,
-  width = 16, height = 5, dpi = 300
+  width = 18, height = 6, dpi = 400
 )
-
 ```
 
 
@@ -461,7 +592,7 @@ base_final_rf_spec <- rand_forest(
   min_n = base_tuned_rf_best$min_n,
   trees = 500
 ) %>%
-  set_engine("ranger", seed = rngseed)
+  set_engine("ranger", seed = rngseed, importance = "impurity")
 
 # Final workflow with tuned model
 base_final_rf_wf <- workflow() %>%
@@ -497,7 +628,45 @@ base_final_rf_test_metrics <- base_final_rf_test_results %>%
 
 # View test set performance
 print(base_final_rf_test_metrics)
+```
 
+Collect metrics and VIP
+```{r}
+# Collect CV metrics and drop extra columns
+base_final_rf_cv_metrics <- collect_metrics(base_final_rf_res) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
+
+# Prepare test metrics to match format
+base_final_rf_test_metrics_fixed <- base_final_rf_test_metrics %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_base_rf_metrics <- bind_rows(
+  base_final_rf_cv_metrics,
+  base_final_rf_test_metrics_fixed
+)
+
+# Print metrics
+print(all_base_rf_metrics)
+
+# Create vip
+vip_base_rf <- vip(base_final_rf_fit)
+
+# Alter aesthetics
+vip_base_rf <- vip_base_rf + 
+  labs(
+    title = "Baseline Random Forest Variable Importance",
+    x = "Importance",
+    y = "Feature"
+  ) + 
+  theme_bw()
+
+# Save vip
+figure_file <- here("results", "figures", "vip_base_rf.png")
+ggsave(filename = figure_file, plot = vip_base_rf, width = 8, height = 6, dpi = 300)
 ```
 
 This code chunk fits and tunes a RF model with mobility predictors.
@@ -531,11 +700,11 @@ final_rf_spec <- rand_forest(
   min_n = rf_best$min_n,
   trees = 500
 ) %>%
-  set_engine("ranger", seed = rngseed)
+  set_engine("ranger", seed = rngseed, importance = "impurity")
 
 # Final workflow with tuned model
 final_rf_wf <- workflow() %>%
-  add_recipe(recipe_baseline) %>%
+  add_recipe(recipe) %>%
   add_model(final_rf_spec)
 
 # Fit final model on training data
@@ -569,6 +738,45 @@ final_rf_test_metrics <- final_rf_test_results %>%
 print(final_rf_test_metrics)
 ```
 
+Collect metrics and VIP
+```{r}
+# Collect CV metrics and drop extra columns
+final_rf_cv_metrics <- collect_metrics(final_rf_res) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
+
+# Prepare test metrics to match format
+final_rf_test_metrics_fixed <- final_rf_test_metrics %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_rf_metrics <- bind_rows(
+  final_rf_cv_metrics,
+  final_rf_test_metrics_fixed
+)
+
+# Print metrics
+print(all_rf_metrics)
+
+# Create vip
+vip_full_rf <- vip(final_rf_fit)
+
+# Alter aesthetics
+vip_full_rf <- vip_full_rf + 
+  labs(
+    title = "Random Forest with Mobility Variable Importance",
+    x = "Importance",
+    y = "Feature"
+  ) + 
+  theme_bw()
+
+# Save vip
+figure_file <- here("results", "figures", "vip_full_rf.png")
+ggsave(filename = figure_file, plot = vip_full_rf, width = 8, height = 6, dpi = 300)
+```
+
 This code chunk fits and tunes a RF model with lagged mobility predictors.
 ```{r}
 # Create lag workflow with baseline recipe
@@ -600,11 +808,11 @@ lag_final_rf_spec <- rand_forest(
   min_n = lag_tuned_rf_best$min_n,
   trees = 500
 ) %>%
-  set_engine("ranger", seed = rngseed)
+  set_engine("ranger", seed = rngseed, importance = "impurity")
 
 # Final workflow with tuned model
 lag_final_rf_wf <- workflow() %>%
-  add_recipe(recipe_baseline) %>%
+  add_recipe(recipe_lag) %>%
   add_model(lag_final_rf_spec)
 
 # Fit final model on training data
@@ -636,7 +844,45 @@ lag_final_rf_test_metrics <- lag_final_rf_test_results %>%
 
 # View test set performance
 print(lag_final_rf_test_metrics)
+```
 
+Collect metrics and CV
+```{r}
+# Collect CV metrics and drop extra columns
+lag_final_rf_cv_metrics <- collect_metrics(lag_final_rf_res) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
+
+# Prepare test metrics to match format
+lag_final_rf_test_metrics_fixed <- lag_final_rf_test_metrics %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_lag_rf_metrics <- bind_rows(
+  lag_final_rf_cv_metrics,
+  lag_final_rf_test_metrics_fixed
+)
+
+# Print metrics
+print(all_lag_rf_metrics)
+
+# Create vip
+vip_lag_rf <- vip(lag_final_rf_fit)
+
+# Alter aesthetics
+vip_lag_rf <- vip_lag_rf + 
+  labs(
+    title = "Random Forest with Lagged Mobility Variable Importance",
+    x = "Importance",
+    y = "Feature"
+  ) + 
+  theme_bw()
+
+# Save vip
+figure_file <- here("results", "figures", "vip_lag_rf.png")
+ggsave(filename = figure_file, plot = vip_lag_rf, width = 8, height = 6, dpi = 300)
 ```
 
 ```{r}
@@ -678,9 +924,9 @@ rf_graphs <- plot_base_rf + plot_rf + plot_lag_rf +
   plot_layout(ncol = 3, widths = c(1.5, 1.5, 1.5)) &
   theme(
     plot.margin = margin(10, 10, 10, 10),
-    plot.title = element_text(size = 14, hjust = 0.5),
-    axis.title = element_text(size = 12),
-    axis.text = element_text(size = 10)
+    plot.title = element_text(size = 20, hjust = 0.5),
+    axis.title = element_text(size = 18),
+    axis.text = element_text(size = 16)
   )
 
 # Print for visual inspection
@@ -691,7 +937,7 @@ figure_file = here("results", "figures", "rf_graphs.png")
 ggsave(
   filename = figure_file,
   plot = rf_graphs,
-  width = 16, height = 5, dpi = 300
+  width = 18, height = 6, dpi = 400
 )
 ```
 
@@ -727,6 +973,8 @@ base_boost_tune_res <- tune_grid(
 base_boost_tune_res %>%
   collect_metrics() %>%
   print()
+
+autoplot(base_boost_tune_res)
 
 base_best_params <- select_best(base_boost_tune_res, metric = "rsq")
 print(base_best_params)
@@ -765,6 +1013,55 @@ base_final_boost_metrics <- base_final_boost_results %>%
 
 # Print final performance metrics
 print(base_final_boost_metrics)
+
+# Extract Model
+base_boost_model <- base_final_boost_fit$fit$fit
+```
+
+Collect metrics and VIP
+```{r}
+
+# select metrics from best model
+base_boost_cv_metrics <- base_boost_tune_res %>%
+  collect_metrics() %>%
+  inner_join(base_best_params, by = c("tree_depth", "learn_rate", "loss_reduction")) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
+
+# Prepare test metrics to match format
+base_final_boost_test_metrics <- base_final_boost_results %>%
+  metrics(truth = truth, estimate = predicted) %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_base_boost_metrics <- bind_rows(
+  base_boost_cv_metrics,
+  base_final_boost_test_metrics
+)
+
+# Print metrics
+print(all_base_boost_metrics)
+
+# Create vip
+vip_base_boost <- vip(base_boost_model)
+
+# Alter aesthetics
+vip_base_boost <- vip_base_boost + 
+  labs(
+    title = "Baseline XGBoost Variable Importance",
+    x = "Importance",
+    y = "Feature"
+  ) + 
+  theme_bw()
+
+# Print
+print(vip_base_boost)
+
+# Save vip
+figure_file <- here("results", "figures", "vip_base_boost.png")
+ggsave(filename = figure_file, plot = vip_base_boost, width = 8, height = 6, dpi = 300)
 ```
 
 This code chunk fits and tunes an XGBoost model with mobility predictors.
@@ -787,6 +1084,8 @@ boost_tune_res <- tune_grid(
 boost_tune_res %>%
   collect_metrics() %>%
   print()
+autoplot(boost_tune_res)
+
 
 best_params <- select_best(boost_tune_res, metric = "rsq")
 print(best_params)
@@ -803,7 +1102,7 @@ final_boost_spec <- boost_tree(
 
 # Final model workflow
 final_boost_wf <- workflow() %>%
-  add_recipe(recipe_baseline) %>%
+  add_recipe(recipe) %>%
   add_model(final_boost_spec)
 
 # Fit the final model
@@ -826,6 +1125,50 @@ final_boost_metrics <- final_boost_results %>%
 # Print final performance metrics
 print(final_boost_metrics)
 
+# Extract Model
+full_boost_model <- final_boost_fit$fit$fit
+```
+
+Collect metrics and VIP
+```{r}
+# Collect CV metrics and drop extra columns
+boost_cv_metrics <- boost_tune_res %>%
+  collect_metrics() %>%
+  inner_join(best_params, by = c("tree_depth", "learn_rate", "loss_reduction")) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
+
+# Prepare test metrics to match format
+final_boost_test_metrics <- final_boost_results %>%
+  metrics(truth = truth, estimate = predicted) %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_boost_metrics <- bind_rows(
+  boost_cv_metrics,
+  final_boost_test_metrics
+)
+
+# Print metrics
+print(all_boost_metrics)
+
+# Create vip
+vip_full_boost <- vip(full_boost_model)
+
+# Alter aesthetics
+vip_full_boost <- vip_full_boost + 
+  labs(
+    title = "XGBoost with Mobility Variable Importance",
+    x = "Importance",
+    y = "Feature"
+  ) + 
+  theme_bw()
+
+# Save vip
+figure_file <- here("results", "figures", "vip_full_boost.png")
+ggsave(filename = figure_file, plot = vip_full_boost, width = 8, height = 6, dpi = 300)
 ```
 
 This code chunk fits and tunes an XGBoost model with lagged mobility predictors.
@@ -864,7 +1207,7 @@ lag_final_boost_spec <- boost_tree(
 
 # Final model workflow
 lag_final_boost_wf <- workflow() %>%
-  add_recipe(recipe_baseline) %>%
+  add_recipe(recipe_lag) %>%
   add_model(lag_final_boost_spec)
 
 # Fit the final model
@@ -886,6 +1229,54 @@ lag_final_boost_metrics <- lag_final_boost_results %>%
 
 # Print final performance metrics
 print(lag_final_boost_metrics)
+
+# Extract Model
+lag_boost_model <- lag_final_boost_fit$fit$fit
+```
+
+Collect metrics and VIP
+```{r}
+# Collect CV metrics and drop extra columns
+lag_boost_cv_metrics <- lag_boost_tune_res %>%
+  collect_metrics() %>%
+  inner_join(lag_best_params, by = c("tree_depth", "learn_rate", "loss_reduction")) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Train")
+
+# Prepare test metrics to match format
+lag_final_boost_test_metrics <- lag_final_boost_results %>%
+  metrics(truth = truth, estimate = predicted) %>%
+  mutate(mean = .estimate) %>%
+  select(.metric, .estimator, mean) %>%
+  mutate(Data = "Test")
+
+# Combine CV and Test metrics
+all_lag_boost_metrics <- bind_rows(
+  lag_boost_cv_metrics,
+  lag_final_boost_test_metrics
+)
+
+# Print metrics
+print(all_lag_boost_metrics)
+
+# Create vip
+vip_lag_boost <- vip(lag_boost_model)
+
+# Alter aesthetics
+vip_lag_boost <- vip_lag_boost + 
+  labs(
+    title = "XGBoost with Lagged Mobility Variable Importance",
+    x = "Importance",
+    y = "Feature"
+  ) + 
+  theme_bw()
+
+# Print
+print(vip_lag_boost)
+
+# Save vip
+figure_file <- here("results", "figures", "vip_lag_boost.png")
+ggsave(filename = figure_file, plot = vip_lag_boost, width = 8, height = 6, dpi = 300)
 ```
 
 ```{r}
@@ -927,9 +1318,9 @@ boost_graphs <- plot_base_boost + plot_boost + plot_lag_boost +
   plot_layout(ncol = 3, widths = c(1.5, 1.5, 1.5)) &
   theme(
     plot.margin = margin(10, 10, 10, 10),
-    plot.title = element_text(size = 14, hjust = 0.5),
-    axis.title = element_text(size = 12),
-    axis.text = element_text(size = 10)
+    plot.title = element_text(size = 20, hjust = 0.5),
+    axis.title = element_text(size = 18),
+    axis.text = element_text(size = 16)
   )
 
 # Print for visual inspection
@@ -940,51 +1331,41 @@ figure_file = here("results", "figures", "boost_graphs.png")
 ggsave(
   filename = figure_file,
   plot = boost_graphs,
-  width = 16, height = 5, dpi = 300
+  width = 18, height = 6, dpi = 400
 )
 
 ```
-
 
 This code chunk merges the results of the best models into a data frame.
 ```{r}
 # Reformat these data frames for joining
 
-base_lasso_metrics <- base_final_lasso_test_metrics %>% 
-  mutate(model = "LASSO (Baseline)") %>%
-  rename(mean = .estimate)
+base_lasso_metrics <- all_base_lasso_metrics %>% 
+  mutate(model = "LASSO (Baseline)")
 
-lasso_metrics <- final_lasso_test_metrics %>% 
-  mutate(model = "LASSO") %>%
-  rename(mean = .estimate)
+lasso_metrics <- all_lasso_metrics %>% 
+  mutate(model = "LASSO")
 
-lag_lasso_metrics <- lag_final_lasso_test_metrics %>% 
-  mutate(model = "LASSO (Lagged Mobility)") %>%
-  rename(mean = .estimate)
+lag_lasso_metrics <- all_lag_lasso_metrics %>% 
+  mutate(model = "LASSO (Lagged Mobility)")
 
-final_boost_metrics <- final_boost_metrics %>%
-  mutate(model = "XGBoost") %>%
-  rename(mean = .estimate)
+base_final_boost_metrics <- all_base_boost_metrics %>%
+  mutate(model = "XGBoost (Baseline)")
 
-final_forest_metrics <- final_rf_test_metrics %>%
-  mutate(model = "Random Forest") %>%
-  rename(mean = .estimate)
+final_boost_metrics <- all_boost_metrics %>%
+  mutate(model = "XGBoost")
 
-base_final_boost_metrics <- base_final_boost_metrics %>%
-  mutate(model = "XGBoost (Baseline)") %>%
-  rename(mean = .estimate)
+lag_boost_metrics <- all_lag_boost_metrics %>%
+  mutate(model = "XGBoost (Lagged Mobility)")
 
-base_final_forest_metrics <- base_final_rf_test_metrics %>%
-  mutate(model = "Random Forest (Baseline)") %>%
-  rename(mean = .estimate)
+base_final_forest_metrics <- all_base_rf_metrics %>%
+  mutate(model = "Random Forest (Baseline)")
 
-lag_boost_metrics <- lag_final_boost_metrics %>%
-  mutate(model = "XGBoost (Lagged Mobility)") %>%
-  rename(mean = .estimate)
+final_forest_metrics <- all_rf_metrics %>%
+  mutate(model = "Random Forest")
 
-lag_forest_metrics <- lag_final_rf_test_metrics %>%
-  mutate(model = "Random Forest (Lagged Mobility)") %>%
-  rename(mean = .estimate)
+lag_forest_metrics <- all_lag_rf_metrics %>%
+  mutate(model = "Random Forest (Lagged Mobility)")
 
 # Join all metrics together
 model_metrics <- bind_rows(base_lasso_metrics, lasso_metrics, lag_lasso_metrics, base_final_boost_metrics, final_boost_metrics, lag_boost_metrics, base_final_forest_metrics, final_forest_metrics, lag_forest_metrics)
@@ -992,8 +1373,73 @@ model_metrics <- bind_rows(base_lasso_metrics, lasso_metrics, lag_lasso_metrics,
 # Pivot and remove unncessary columns
 model_metrics <- model_metrics %>%
   select(-.estimator) %>%
-  pivot_wider(names_from = '.metric', values_from = mean)
+  pivot_wider(names_from = c('.metric', 'Data'), values_from = mean)
 ```
+
+```{r}
+model_table <- model_metrics %>%
+  select(model, rmse_Train, mae_Train, rsq_Train, rmse_Test, mae_Test, rsq_Test) %>%
+  gt() %>%
+  tab_header(
+    title = "Model Performance Metrics",
+    subtitle = "Train and Test Results | Best Performance Highlighted in Green"
+  ) %>%
+  fmt_number(columns = everything(), decimals = 3) %>%
+  cols_label(
+    model = "Model",
+    rmse_Train = "RMSE",
+    mae_Train = "MAE",
+    rsq_Train = "R²",
+    rmse_Test = "RMSE",
+    mae_Test = "MAE",
+    rsq_Test = "R²"
+  ) %>%
+  tab_spanner(
+    label = "Train Metrics",
+    columns = c(rmse_Train, mae_Train, rsq_Train)
+  ) %>%
+  tab_spanner(
+    label = "Test Metrics",
+    columns = c(rmse_Test, mae_Test, rsq_Test)
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "lightgreen"),
+    locations = cells_body(
+      columns = rmse_Test,
+      rows = rmse_Test == min(rmse_Test, na.rm = TRUE)
+    )
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "lightgreen"),
+    locations = cells_body(
+      columns = mae_Test,
+      rows = mae_Test == min(mae_Test, na.rm = TRUE)
+    )
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "lightgreen"),
+    locations = cells_body(
+      columns = rsq_Test,
+      rows = rsq_Test == max(rsq_Test, na.rm = TRUE)
+    )
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_options(
+    table.width = pct(100),
+    table.align = "left",
+    column_labels.padding = px(10),
+    data_row.padding = px(6)
+  )
+
+print(model_table)
+
+gtsave(model_table, here("results", "figures", "models.png"))
+```
+
+
 
 This code chunk creates a short summary table of the results from the model_metrics data frame.
 ```{r}
@@ -1001,7 +1447,7 @@ This code chunk creates a short summary table of the results from the model_metr
 model_table <- model_metrics %>%
   gt() %>%
   tab_header(
-    title = "Model Performance Metrics",
+    title = "Model Performance Metrics on Data",
     subtitle = "Best values are highlighted per metric"
   ) %>%
   fmt_number(columns = c(rmse, mae), decimals = 1) %>%
