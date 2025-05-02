@@ -1339,7 +1339,6 @@ ggsave(
 This code chunk merges the results of the best models into a data frame.
 ```{r}
 # Reformat these data frames for joining
-
 base_lasso_metrics <- all_base_lasso_metrics %>% 
   mutate(model = "LASSO (Baseline)")
 
@@ -1376,7 +1375,10 @@ model_metrics <- model_metrics %>%
   pivot_wider(names_from = c('.metric', 'Data'), values_from = mean)
 ```
 
+This code chunk creates a short summary table of the results from the model_metrics data frame.
+
 ```{r}
+# Create table and also reorder data frame columns
 model_table <- model_metrics %>%
   select(model, rmse_Train, mae_Train, rsq_Train, rmse_Test, mae_Test, rsq_Test) %>%
   gt() %>%
@@ -1423,69 +1425,6 @@ model_table <- model_metrics %>%
       rows = rsq_Test == max(rsq_Test, na.rm = TRUE)
     )
   ) %>%
-  tab_style(
-    style = cell_text(weight = "bold"),
-    locations = cells_column_labels(everything())
-  ) %>%
-  tab_options(
-    table.width = pct(100),
-    table.align = "left",
-    column_labels.padding = px(10),
-    data_row.padding = px(6)
-  )
-
-print(model_table)
-
-gtsave(model_table, here("results", "figures", "models.png"))
-```
-
-
-
-This code chunk creates a short summary table of the results from the model_metrics data frame.
-```{r}
-# Create gt table
-model_table <- model_metrics %>%
-  gt() %>%
-  tab_header(
-    title = "Model Performance Metrics on Data",
-    subtitle = "Best values are highlighted per metric"
-  ) %>%
-  fmt_number(columns = c(rmse, mae), decimals = 1) %>%
-  fmt_number(columns = rsq, decimals = 3) %>%
-  cols_label(
-    model = "Model",
-    rmse = "RMSE",
-    rsq = "R²",
-    mae = "MAE"
-  ) %>%
-
-  # Highlight lowest RMSE
-  tab_style(
-    style = cell_fill(color = "lightgreen"),
-    locations = cells_body(
-      columns = rmse,
-      rows = rmse == min(rmse, na.rm = TRUE)
-    )
-  ) %>%
-
-  # Highlight lowest MAE
-  tab_style(
-    style = cell_fill(color = "lightgreen"),
-    locations = cells_body(
-      columns = mae,
-      rows = mae == min(mae, na.rm = TRUE)
-    )
-  ) %>%
-
-  # Highlight highest R²
-  tab_style(
-    style = cell_fill(color = "lightgreen"),
-    locations = cells_body(
-      columns = rsq,
-      rows = rsq == max(rsq, na.rm = TRUE)
-    )
-  ) %>%
-
   tab_style(
     style = cell_text(weight = "bold"),
     locations = cells_column_labels(everything())

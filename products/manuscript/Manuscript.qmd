@@ -311,7 +311,7 @@ A strength of this analysis is the inclusion of open source data, along with bas
 
 ## Conclusions
 
-This research explores the potential of incorporating mobility dynamics into public health surveillance, specifically, for COVID-19 case forecasting. The improvement of models, in the metrics of interest, suggest the added predictive value of mobility predictors, indicating that these variables can improve forecasting accuracy for COVID-19 case incidence. Future research should explore the integration of additional behavioral predictors, examine these findings in different geographic and sociopolitical contexts, and assess how mobility patterns interact with other public health interventions to influence disease transmission dynamics.
+This research explores the potential of incorporating mobility dynamics into public health surveillance, specifically, for COVID-19 case forecasting. The improvement of models, in the metrics of interest, suggest the added predictive value of mobility predictors, indicating that these variables can improve forecasting accuracy for COVID-19 case incidence. Limited improvements in explanatory power cautions against over-reliance on mobility predictors and demonstrate that mobility alone is insufficient to fully account for the complex dynamics of disease spread. Future research should explore the integration of additional behavioral predictors, examine these findings in different geographic and sociopolitical contexts, and assess how mobility patterns interact with other public health interventions to influence disease transmission dynamics.
 
 
 {{< pagebreak >}}
